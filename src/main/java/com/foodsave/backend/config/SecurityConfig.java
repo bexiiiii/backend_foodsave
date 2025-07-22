@@ -50,6 +50,7 @@ public class SecurityConfig {
 
                 // Публичные GET-запросы к продуктам
                 .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/products/**").permitAll()
 
                 // Временно разрешаем POST/PUT/DELETE (можно отключить позже)
                 .requestMatchers(HttpMethod.POST, "/api/products").permitAll()
@@ -58,9 +59,11 @@ public class SecurityConfig {
 
                 // Публичные категории
                 .requestMatchers(HttpMethod.GET, "/api/categories/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/categories/**").permitAll()
 
                 // Публичные магазины
                 .requestMatchers(HttpMethod.GET, "/api/stores/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/stores/**").permitAll()
 
                 // Actuator
                 .requestMatchers("/actuator/**").permitAll()
