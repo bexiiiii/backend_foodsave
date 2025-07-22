@@ -182,4 +182,16 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
            "FROM Order o JOIN o.items oi WHERE o.store = :store " +
            "GROUP BY oi.product.id")
     Map<Long, BigDecimal> sumDiscountByStoreAndProduct(@Param("store") Store store);
+    
+    // Methods for multiple store IDs
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.store.id IN :storeIds")
+    long countByStoreIdIn(@Param("storeIds") List<Long> storeIds);
+    
+    @Query("SELECT SUM(o.total) FROM Order o WHERE o.store.id IN :storeIds")
+    BigDecimal sumTotalByStoreIdIn(@Param("storeIds") List<Long> storeIds);
+    
+    @Query("SELECT o FROM Order o WHERE o.store.id IN :storeIds AND o.createdAt BETWEEN :startDate AND :endDate")
+    List<Order> findByStoreIdInAndCreatedAtBetween(@Param("storeIds") List<Long> storeIds, 
+                                                   @Param("startDate") LocalDateTime startDate, 
+                                                   @Param("endDate") LocalDateTime endDate);
 }

@@ -30,15 +30,42 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         try {
             String path = request.getRequestURI();
-            if (path.startsWith("/api/auth/")) {
-                // 💡 Пропускаем запросы без авторизации
+            String method = request.getMethod();
+            
+            // Пропускаем auth эндпоинты без авторизации
+            if (path.equals("/api/auth/login") || 
+                path.equals("/api/auth/register") || 
+                path.equals("/api/auth/verify-email") ||
+                path.equals("/api/auth/refresh-token") ||
+                path.startsWith("/api/auth/dev-")) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+            
+            // Пропускаем публичные GET эндпоинты без авторизации
+            if ("GET".equals(method)) {
+                if (path.startsWith("/api/stores") || 
+                    path.startsWith("/api/categories") || 
+                    path.startsWith("/api/products") ||
+                    path.startsWith("/api/permissions") ||
+                    path.startsWith("/swagger-ui") ||
+                    path.startsWith("/v3/api-docs") ||
+                    path.startsWith("/actuator")) {
+                    filterChain.doFilter(request, response);
+                    return;
+                }
+            }
+            
+            // Пропускаем Swagger UI и документацию
+            if (path.startsWith("/swagger-ui") || 
+                path.startsWith("/v3/api-docs") || 
+                path.startsWith("/swagger-resources") || 
+                path.startsWith("/webjars")) {
                 filterChain.doFilter(request, response);
                 return;
             }
 
-            String requestUri = request.getRequestURI();
-            String method = request.getMethod();
-            log.debug("Processing request: {} {}", method, requestUri);
+            log.debug("Processing request: {} {}", method, path);
 
             String jwt = getJwtFromRequest(request);
             log.debug("JWT token present: {}", jwt != null);
@@ -56,7 +83,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 SecurityContextHolder.getContext().setAuthentication(authentication);
                 log.debug("Authentication set for user: {}", username);
             } else if (StringUtils.hasText(jwt)) {
-                log.warn("Invalid JWT token for request: {} {}", method, requestUri);
+                log.warn("Invalid JWT token for request: {} {}", method, path);
             }
 
         } catch (Exception ex) {

@@ -4,8 +4,9 @@ import com.foodsave.backend.entity.User;
 import com.foodsave.backend.dto.UserDTO;
 import com.foodsave.backend.repository.UserRepository;
 import com.foodsave.backend.domain.enums.UserRole;
-import com.foodsave.backend.util.SecurityUtil;
+import com.foodsave.backend.security.UserPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.Authentication;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -25,7 +26,6 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
-    private final SecurityUtil securityUtil;
 
     public List<UserDTO> getAllUsers() {
         return userRepository.findAll().stream()
@@ -52,8 +52,19 @@ public class UserService {
     }
 
     public UserDTO getCurrentUser() {
-        User currentUser = securityUtil.getCurrentUser();
-        return UserDTO.fromEntity(currentUser);
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        
+        if (authentication != null && authentication.getPrincipal() instanceof UserPrincipal) {
+            UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
+            
+            // Получаем полную информацию о пользователе из базы данных
+            User user = userRepository.findById(userPrincipal.getId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+            
+            return UserDTO.fromEntity(user);
+        }
+        
+        throw new RuntimeException("User not authenticated");
     }
 
     public UserDTO updateUserProfile(UserDTO userDTO) {

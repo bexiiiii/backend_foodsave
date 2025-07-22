@@ -79,7 +79,14 @@ public class StoreService {
         store.setClosingHours(storeDTO.getClosingHours());
         store.setCategory(storeDTO.getCategory());
         store.setActive(storeDTO.isActive());
-        store.setStatus(storeDTO.getStatus());
+        
+        // Устанавливаем статус ACTIVE по умолчанию, если не указан в DTO
+        if (storeDTO.getStatus() != null) {
+            store.setStatus(storeDTO.getStatus());
+        } else {
+            store.setStatus(StoreStatus.ACTIVE);
+        }
+        
         store.setOwner(existingUser); // Link with existing user
 
         // Назначаем менеджера, если указан
@@ -101,26 +108,34 @@ public class StoreService {
     }
 
     public StoreDTO createStore(StoreDTO storeDTO, String ownerEmail) {
-        User owner = userRepository.findByEmail(ownerEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + ownerEmail));
-        Store store = new Store();
-        updateStoreFromDTO(store, storeDTO);
-        store.setOwner(owner);
-        
-        // Назначаем менеджера, если указан
-        if (storeDTO.getManagerId() != null) {
-            User manager = userRepository.findById(storeDTO.getManagerId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Manager not found with id: " + storeDTO.getManagerId()));
+        try {
+            // Log the incoming request
+            System.out.println("Creating store with DTO: " + storeDTO.toString());
+            System.out.println("Owner email: " + ownerEmail);
+
+            Store store = new Store();
+            updateStoreFromDTO(store, storeDTO);
+            // Default to ACTIVE status if not specified in DTO
+            if (store.getStatus() == null) {
+                store.setStatus(StoreStatus.ACTIVE);
+            }
+
+            User owner = userRepository.findByEmail(ownerEmail)
+                    .orElseThrow(() -> new RuntimeException("Owner not found with email: " + ownerEmail));
+            store.setOwner(owner);
+
+            Store savedStore = storeRepository.save(store);
+            System.out.println("Store created successfully with ID: " + savedStore.getId());
             
-            // Изменяем роль пользователя на STORE_MANAGER
-            manager.setRole(com.foodsave.backend.domain.enums.UserRole.STORE_MANAGER);
-            userRepository.save(manager);
-            
-            store.setManager(manager);
+            // Convert to DTO and return
+            StoreDTO responseDTO = StoreDTO.fromEntity(savedStore);
+            responseDTO.setUser(UserDTO.fromEntity(owner));
+            return responseDTO;
+        } catch (Exception e) {
+            System.err.println("Error creating store: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to create store", e);
         }
-        
-        store.setStatus(StoreStatus.PENDING);
-        return StoreDTO.fromEntity(storeRepository.save(store));
     }
 
     public StoreDTO updateStore(Long id, StoreDTO storeDTO) {
@@ -141,11 +156,14 @@ public class StoreService {
 
         // Обновляем менеджера
         if (storeDTO.getManagerId() != null) {
-            // Сбрасываем роль предыдущего менеджера, если он был
+            // Сбрасываем роль предыдущего менеджера, если он был и не управляет другими магазинами
             if (store.getManager() != null) {
                 User previousManager = store.getManager();
-                previousManager.setRole(com.foodsave.backend.domain.enums.UserRole.CUSTOMER);
-                userRepository.save(previousManager);
+                // Проверяем, управляет ли предыдущий менеджер другими магазинами
+                if (!isManagerOfOtherStores(previousManager, store.getId())) {
+                    previousManager.setRole(com.foodsave.backend.domain.enums.UserRole.CUSTOMER);
+                    userRepository.save(previousManager);
+                }
             }
             
             // Назначаем нового менеджера
@@ -157,11 +175,14 @@ public class StoreService {
             
             store.setManager(newManager);
         } else {
-            // Если менеджер не указан, сбрасываем роль текущего менеджера
+            // Если менеджер не указан, сбрасываем роль текущего менеджера только если он не управляет другими магазинами
             if (store.getManager() != null) {
                 User currentManager = store.getManager();
-                currentManager.setRole(com.foodsave.backend.domain.enums.UserRole.CUSTOMER);
-                userRepository.save(currentManager);
+                // Проверяем, управляет ли текущий менеджер другими магазинами
+                if (!isManagerOfOtherStores(currentManager, store.getId())) {
+                    currentManager.setRole(com.foodsave.backend.domain.enums.UserRole.CUSTOMER);
+                    userRepository.save(currentManager);
+                }
                 store.setManager(null);
             }
         }
@@ -173,9 +194,19 @@ public class StoreService {
     }
 
     public void deleteStore(Long id) {
-        if (!storeRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Store not found with id: " + id);
+        Store store = storeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Store not found with id: " + id));
+        
+        // Если у магазина есть менеджер, проверяем, нужно ли сбросить его роль
+        if (store.getManager() != null) {
+            User manager = store.getManager();
+            // Проверяем, управляет ли менеджер другими магазинами
+            if (!isManagerOfOtherStores(manager, store.getId())) {
+                manager.setRole(com.foodsave.backend.domain.enums.UserRole.CUSTOMER);
+                userRepository.save(manager);
+            }
         }
+        
         storeRepository.deleteById(id);
     }
 
@@ -330,5 +361,12 @@ public class StoreService {
         return getCurrentManagerStore()
                 .map(StoreDTO::getId)
                 .orElse(null);
+    }
+    
+    // Проверяет, является ли пользователь менеджером других магазинов
+    private boolean isManagerOfOtherStores(User user, Long excludeStoreId) {
+        List<Store> managedStores = storeRepository.findAllByManager(user);
+        return managedStores.stream()
+                .anyMatch(store -> !store.getId().equals(excludeStoreId));
     }
 }

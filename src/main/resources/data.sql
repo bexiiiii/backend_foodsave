@@ -43,6 +43,12 @@ INSERT INTO products (name, description, price, original_price, category_id, sto
 ('Сырный гурман бокс', 'Коллекция изысканных сыров: твердые, мягкие, с плесенью', 3200.00, 4800.00, 3, 5, 15, '2025-07-23', 'ACTIVE', true, NOW(), NOW()),
 ('Молочный семейный бокс', 'Основные молочные продукты для всей семьи', 2100.00, 3200.00, 3, 5, 22, '2025-07-21', 'ACTIVE', true, NOW(), NOW()),
 
+-- Insert test users first
+INSERT INTO users (first_name, last_name, email, password, phone, profile_picture, address, role, enabled, active, created_at, updated_at) VALUES
+('Dev', 'User', 'dev@example.com', '$2a$10$dXJ3SW6G7P4gg5H4q9A2zO6e2A0U4.YdM..pKd/QUVpyYzGQ5gUQe', '+7-777-123-4567', null, 'Алматы, ул. Тестовая 1', 'STORE_MANAGER', true, true, NOW(), NOW()),
+('Super', 'Admin', 'admin@example.com', '$2a$10$dXJ3SW6G7P4gg5H4q9A2zO6e2A0U4.YdM..pKd/QUVpyYzGQ5gUQe', '+7-777-234-5678', null, 'Алматы, ул. Админская 2', 'SUPER_ADMIN', true, true, NOW(), NOW()),
+('Store', 'Owner', 'owner@example.com', '$2a$10$dXJ3SW6G7P4gg5H4q9A2zO6e2A0U4.YdM..pKd/QUVpyYzGQ5gUQe', '+7-777-345-6789', null, 'Алматы, ул. Владельческая 3', 'STORE_OWNER', true, true, NOW(), NOW());
+
 -- Fruit Garden products
 INSERT INTO products (name, description, price, original_price, category_id, store_id, stock_quantity, expiry_date, status, active, created_at, updated_at) VALUES
 ('Тропический фруктовый бокс', 'Экзотические фрукты: манго, ананас, папайя, маракуйя', 2800.00, 4200.00, 4, 6, 20, '2025-07-20', 'ACTIVE', true, NOW(), NOW()),

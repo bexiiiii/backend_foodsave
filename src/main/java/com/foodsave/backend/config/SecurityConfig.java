@@ -42,6 +42,9 @@ public class SecurityConfig {
                 // Auth + User endpoints
                 .requestMatchers("/api/auth/**", "/api/users/**").permitAll()
 
+                // Development endpoints
+                .requestMatchers("/api/auth/dev-login", "/api/auth/dev-token").permitAll()
+
                 // Временно разрешены Permissions для теста
                 .requestMatchers("/api/permissions/**").permitAll()
 
