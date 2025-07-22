@@ -42,25 +42,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
             
-            // Пропускаем публичные GET эндпоинты без авторизации
-            if ("GET".equals(method)) {
-                if (path.startsWith("/api/stores") || 
-                    path.startsWith("/api/categories") || 
-                    path.startsWith("/api/products") ||
-                    path.startsWith("/api/permissions") ||
-                    path.startsWith("/swagger-ui") ||
-                    path.startsWith("/v3/api-docs") ||
-                    path.startsWith("/actuator")) {
-                    filterChain.doFilter(request, response);
-                    return;
-                }
-            }
-            
-            // Пропускаем Swagger UI и документацию
-            if (path.startsWith("/swagger-ui") || 
-                path.startsWith("/v3/api-docs") || 
-                path.startsWith("/swagger-resources") || 
-                path.startsWith("/webjars")) {
+            // Пропускаем все публичные эндпоинты без авторизации
+            if (path.startsWith("/api/stores") || 
+                path.startsWith("/api/categories") || 
+                path.startsWith("/api/products") ||
+                path.startsWith("/api/permissions") ||
+                path.startsWith("/swagger-ui") ||
+                path.startsWith("/v3/api-docs") ||
+                path.startsWith("/swagger-resources") ||
+                path.startsWith("/webjars") ||
+                path.startsWith("/actuator")) {
                 filterChain.doFilter(request, response);
                 return;
             }
