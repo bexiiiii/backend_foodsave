@@ -48,19 +48,24 @@ public class SecurityConfig {
                 // Временно разрешены Permissions для теста
                 .requestMatchers("/api/permissions/**").permitAll()
 
-                // Публичные GET-запросы к продуктам
-                .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
-
-                // Временно разрешаем POST/PUT/DELETE (можно отключить позже)
-                .requestMatchers(HttpMethod.POST, "/api/products").permitAll()
-                .requestMatchers(HttpMethod.PUT, "/api/products/**").permitAll()
-                .requestMatchers(HttpMethod.DELETE, "/api/products/**").permitAll()
-
-                // Публичные категории
+                                // Public product endpoints - more specific first
+                .requestMatchers(HttpMethod.GET, "/api/products/featured").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/products/categories").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/products/store/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/products/*").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/products").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/products").permitAll() // Временно для тестирования
+                .requestMatchers(HttpMethod.PUT, "/api/products/**").permitAll() // Временно для тестирования
+                .requestMatchers(HttpMethod.DELETE, "/api/products/**").permitAll() // Временно для тестирования
                 .requestMatchers(HttpMethod.GET, "/api/categories/**").permitAll()
-
-                // Публичные магазины
-                .requestMatchers(HttpMethod.GET, "/api/stores/**").permitAll()
+                
+                // Public endpoints without /api prefix
+                .requestMatchers(HttpMethod.GET, "/products/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/categories/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/stores/**").permitAll()
+                
+                // Public store endpoints
+                .requestMatchers(HttpMethod.GET, "/api/stores/*").permitAll()
 
                 // Actuator
                 .requestMatchers("/actuator/**").permitAll()
