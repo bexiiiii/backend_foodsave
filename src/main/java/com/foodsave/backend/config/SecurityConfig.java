@@ -36,19 +36,20 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .authorizeHttpRequests(auth -> auth
-                // Swagger UI (разрешено всем)
-                .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**").permitAll()
 
-                // Auth + User endpoints
-                .requestMatchers("/api/auth/**", "/api/users/**").permitAll()
-
-                // Development endpoints
-                .requestMatchers("/api/auth/dev-login", "/api/auth/dev-token").permitAll()
-
-                // Временно разрешены Permissions для теста
-                .requestMatchers("/api/permissions/**").permitAll()
-
-                                // Public product endpoints - more specific first
+                // Swagger UI
+                .requestMatchers("/swagger-ui/**").permitAll()
+                .requestMatchers("/swagger-ui.html").permitAll()
+                .requestMatchers("/v3/api-docs/**").permitAll()
+                .requestMatchers("/swagger-resources/**").permitAll()
+                .requestMatchers("/webjars/**").permitAll()
+                
+                // Auth endpoints
+                .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/users/**").permitAll()
+                .requestMatchers("/api/permissions/**").permitAll() // Временно для тестирования
+                
+                // Public product endpoints - more specific first
                 .requestMatchers(HttpMethod.GET, "/api/products/featured").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/products/categories").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/products/store/**").permitAll()
@@ -59,21 +60,18 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, "/api/products/**").permitAll() // Временно для тестирования
                 .requestMatchers(HttpMethod.GET, "/api/categories/**").permitAll()
                 
-                // Public endpoints without /api prefix
-                .requestMatchers(HttpMethod.GET, "/products/**").permitAll()
-                .requestMatchers(HttpMethod.GET, "/categories/**").permitAll()
-                .requestMatchers(HttpMethod.GET, "/stores/**").permitAll()
-                
                 // Public store endpoints
                 .requestMatchers(HttpMethod.GET, "/api/stores/*").permitAll()
-
+                
                 // Actuator
                 .requestMatchers("/actuator/**").permitAll()
-
-                // Всё остальное — требует авторизации
+                
+                // All other requests need authentication
                 .anyRequest().authenticated()
             )
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .sessionManagement(session -> session
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            )
             .exceptionHandling(exception -> exception
                 .authenticationEntryPoint((request, response, authException) -> {
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
@@ -93,12 +91,12 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(Arrays.asList(
-            "http://localhost:3000",
-            "http://localhost:3001",
-            "http://192.168.8.147:3000",
             "https://foodsave.kz",
             "https://admin.foodsave.kz",
-            "https://partner.foodsave.kz"
+            "https://partner.foodsave.kz",
+            "http://localhost:3000", 
+            "http://localhost:3001",
+            "http://192.168.8.147:3000"
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList(
@@ -113,7 +111,7 @@ public class SecurityConfig {
         configuration.setExposedHeaders(Arrays.asList("Authorization"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
-
+        
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
