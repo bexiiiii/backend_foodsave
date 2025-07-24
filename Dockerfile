@@ -1,34 +1,31 @@
 # ---------- Build stage ----------
-FROM maven:3.9-eclipse-temurin-17 AS build
+FROM eclipse-temurin:21-jdk-alpine AS build
 WORKDIR /app
 
-# Copy pom.xml and download dependencies
+# Install Maven
+RUN apk add --no-cache maven
+
+# Copy pom.xml first for better caching
 COPY pom.xml .
 RUN mvn dependency:go-offline -B
 
-# Copy source code
+# Copy source and build
 COPY src ./src
-
-# Build the application
-RUN mvn package -DskipTests
+RUN mvn clean package -DskipTests -B
 
 
 # ---------- Run stage ----------
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
-# Copy the built JAR from build stage
+# Copy built jar from build stage
 COPY --from=build /app/target/*.jar app.jar
 
-# Create a non-root user for security
-RUN addgroup -S spring && adduser -S spring -G spring
-USER spring:spring
+# Create non-root user
+RUN adduser -D -s /bin/sh spring
+USER spring
 
-# Expose the default Spring Boot port
 EXPOSE 8080
 
-# Set JVM options (can be overridden at runtime)
-ENV JAVA_OPTS="-Xms512m -Xmx1024m"
-
-# Use shell form to allow environment variable expansion
-ENTRYPOINT sh -c "java $JAVA_OPTS -jar app.jar"
+# Run application
+ENTRYPOINT ["java", "-Dspring.profiles.active=prod", "-jar", "app.jar"]
