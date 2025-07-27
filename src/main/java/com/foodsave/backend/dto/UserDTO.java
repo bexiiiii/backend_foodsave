@@ -37,6 +37,7 @@ public class UserDTO {
 
     private String address;
 
+    // Пароль не возвращаем в fromEntity!
     private String password;
 
     private UserRole role;
@@ -44,6 +45,9 @@ public class UserDTO {
     private boolean active;
 
     public static UserDTO fromEntity(User user) {
+        if (user == null) {
+            return null;
+        }
         return UserDTO.builder()
                 .id(user.getId())
                 .firstName(user.getFirstName())
@@ -54,6 +58,7 @@ public class UserDTO {
                 .address(user.getAddress())
                 .role(user.getRole())
                 .active(user.isActive())
+                .password(null) // Никогда не возвращаем пароль!
                 .build();
     }
 }
