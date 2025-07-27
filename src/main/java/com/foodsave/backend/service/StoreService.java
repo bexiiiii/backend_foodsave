@@ -22,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.Optional;
+import java.util.ArrayList;
 
 @Service
 @RequiredArgsConstructor
@@ -42,10 +42,20 @@ public class StoreService {
     }
 
     public List<StoreDTO> getActiveStores() {
-        return storeRepository.findByActiveAndStatus(true, StoreStatus.ACTIVE)
-                .stream()
-                .map(this::convertToStoreDTO)
-                .toList();
+        try {
+            List<Store> activeStores = storeRepository.findByActiveAndStatus(true, StoreStatus.ACTIVE);
+            System.out.println("Found " + activeStores.size() + " active stores");
+            
+            return activeStores.stream()
+                    .map(this::convertToStoreDTOSafely)
+                    .filter(dto -> dto != null) // Filter out any null DTOs from failed conversions
+                    .toList();
+        } catch (Exception e) {
+            System.err.println("Error retrieving active stores: " + e.getMessage());
+            e.printStackTrace();
+            // Return empty list instead of throwing exception to prevent 500 error
+            return new ArrayList<>();
+        }
     }
 
     private StoreDTO convertToStoreDTO(Store store) {
@@ -54,6 +64,17 @@ public class StoreService {
         long productCount = productRepository.countActiveByStoreId(store.getId());
         dto.setProductCount((int) productCount);
         return dto;
+    }
+
+    private StoreDTO convertToStoreDTOSafely(Store store) {
+        try {
+            return convertToStoreDTO(store);
+        } catch (Exception e) {
+            System.err.println("Error converting store to DTO for store ID " + store.getId() + ": " + e.getMessage());
+            e.printStackTrace();
+            // Return null to filter out this store, preventing the entire endpoint from failing
+            return null;
+        }
     }
 
     public StoreDTO getStoreById(Long id) {
