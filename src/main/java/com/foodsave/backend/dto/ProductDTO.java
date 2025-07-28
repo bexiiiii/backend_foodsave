@@ -14,6 +14,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Data
@@ -80,6 +81,14 @@ public class ProductDTO {
     private String updatedAt;
     
     public static ProductDTO fromEntity(Product product) {
+        List<String> imagesCopy = new ArrayList<>();
+        try {
+            if (product.getImages() != null) {
+                imagesCopy = new ArrayList<>(product.getImages());
+            }
+        } catch (Exception e) {
+            // fallback: leave imagesCopy empty
+        }
         return ProductDTO.builder()
                 .id(product.getId())
                 .name(product.getName())
@@ -94,7 +103,7 @@ public class ProductDTO {
                 .storeAddress(product.getStore().getAddress())
                 .categoryId(product.getCategory().getId())
                 .categoryName(product.getCategory().getName())
-                .images(product.getImages())
+                .images(imagesCopy)
                 .expiryDate(product.getExpiryDate())
                 .status(product.getStatus())
                 .active(product.getActive())
@@ -103,7 +112,7 @@ public class ProductDTO {
                            product.getStatus() == ProductStatus.AVAILABLE && 
                            product.getStockQuantity() > 0)
                 .availableQuantity(product.getStockQuantity())
-                .imageUrl(!product.getImages().isEmpty() ? product.getImages().get(0) : null)
+                .imageUrl(!imagesCopy.isEmpty() ? imagesCopy.get(0) : null)
                 .expirationDate(product.getExpiryDate() != null ? product.getExpiryDate().toString() : null)
                 .isFeatured(product.getDiscountPercentage() != null && product.getDiscountPercentage() > 0)
                 .rating(0.0) // Default rating for now

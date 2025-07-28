@@ -38,7 +38,7 @@ public class CartService {
 
     public CartDTO getCartByUser(String email) {
         User user = getUserByEmail(email);
-        Cart cart = cartRepository.findByUser(user)
+        Cart cart = cartRepository.findByUserWithItemsAndProductImages(user)
                 .orElseGet(() -> createNewCart(user));
         return CartDTO.fromEntity(cart);
     }
@@ -160,8 +160,9 @@ public class CartService {
     }
 
     private Cart createNewCart(User user) {
-        Cart cart = new Cart();
-        cart.setUser(user);
-        return cartRepository.save(cart);
+        Cart newCart = new Cart();
+        newCart.setUser(user);
+        return cartRepository.save(newCart);
     }
+
 }

@@ -41,20 +41,20 @@ public class CartItemDTO {
     
     public static CartItemDTO fromEntity(CartItem item) {
         List<String> imageUrls = new ArrayList<>();
-        if (item.getProduct() != null && item.getProduct().getImages() != null) {
-            for (Object img : item.getProduct().getImages()) {
-                // If images is List<String>
-                if (img instanceof String) {
-                    imageUrls.add((String) img);
+        // Safely access product images to avoid LazyInitializationException
+        if (item.getProduct() != null) {
+            try {
+                // Check if the images collection is initialized
+                List<String> images = item.getProduct().getImages();
+                if (images != null && org.hibernate.Hibernate.isInitialized(images)) {
+                    imageUrls = new ArrayList<>(images);
                 }
-                // If images is List<ProductImage>
-                else if (img != null && img.getClass().getSimpleName().equals("ProductImage")) {
-                    try {
-                        imageUrls.add((String) img.getClass().getMethod("getUrl").invoke(img));
-                    } catch (Exception ignore) {}
-                }
+            } catch (Exception e) {
+                // Fallback: leave imageUrls empty if we can't access images
+                imageUrls = new ArrayList<>();
             }
         }
+        
         return CartItemDTO.builder()
                 .id(item.getId())
                 .cartId(item.getCart().getId())
