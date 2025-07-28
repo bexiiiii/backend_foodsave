@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.Builder;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -39,10 +40,20 @@ public class CartItemDTO {
     private BigDecimal total;
     
     public static CartItemDTO fromEntity(CartItem item) {
-        List<String> imageUrls = null;
+        List<String> imageUrls = new ArrayList<>();
         if (item.getProduct() != null && item.getProduct().getImages() != null) {
-            // getImages() возвращает List<String>, просто копируем
-            imageUrls = new java.util.ArrayList<>(item.getProduct().getImages());
+            for (Object img : item.getProduct().getImages()) {
+                // If images is List<String>
+                if (img instanceof String) {
+                    imageUrls.add((String) img);
+                }
+                // If images is List<ProductImage>
+                else if (img != null && img.getClass().getSimpleName().equals("ProductImage")) {
+                    try {
+                        imageUrls.add((String) img.getClass().getMethod("getUrl").invoke(img));
+                    } catch (Exception ignore) {}
+                }
+            }
         }
         return CartItemDTO.builder()
                 .id(item.getId())
