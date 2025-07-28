@@ -8,6 +8,7 @@ import lombok.Builder;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Data
 @Builder
@@ -37,19 +38,24 @@ public class CartItemDTO {
     
     private BigDecimal total;
     
-    public static CartItemDTO fromEntity(CartItem cartItem) {
+    public static CartItemDTO fromEntity(CartItem item) {
+        List<String> imageUrls = null;
+        if (item.getProduct() != null && item.getProduct().getImages() != null) {
+            // getImages() возвращает List<String>, просто копируем
+            imageUrls = new java.util.ArrayList<>(item.getProduct().getImages());
+        }
         return CartItemDTO.builder()
-                .id(cartItem.getId())
-                .cartId(cartItem.getCart().getId())
-                .productId(cartItem.getProduct().getId())
-                .productName(cartItem.getProduct().getName())
-                .productImages(cartItem.getProduct().getImages())
-                .quantity(cartItem.getQuantity())
-                .price(cartItem.getPrice())
-                .discountPrice(cartItem.getDiscountPrice())
-                .subtotal(cartItem.getSubtotal())
-                .discount(cartItem.getDiscount())
-                .total(cartItem.getTotal())
+                .id(item.getId())
+                .cartId(item.getCart().getId())
+                .productId(item.getProduct().getId())
+                .productName(item.getProduct().getName())
+                .productImages(imageUrls)
+                .quantity(item.getQuantity())
+                .price(item.getPrice())
+                .discountPrice(item.getDiscountPrice())
+                .subtotal(item.getSubtotal())
+                .discount(item.getDiscount())
+                .total(item.getTotal())
                 .build();
     }
 }
