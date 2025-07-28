@@ -39,7 +39,7 @@ public class CartService {
     public CartDTO getCartByUser(String email) {
         User user = getUserByEmail(email);
         Cart cart = cartRepository
-                .findByUserWithItemsAndProductImages(user)   // ← JOIN FETCH здесь
+                .findByUserWithItemsAndProductImages(user)
                 .orElseGet(() -> createNewCart(user));
         return CartDTO.fromEntity(cart);
     }
@@ -47,13 +47,28 @@ public class CartService {
     public CartDTO addItemToCart(String email, CartItemDTO cartItemDTO) {
         User user = getUserByEmail(email);
         Cart cart = cartRepository
-                .findByUserWithItemsAndProductImages(user)   // ← и здесь
+                .findByUserWithItemsAndProductImages(user)
                 .orElseGet(() -> createNewCart(user));
 
         Product product = productRepository.findById(cartItemDTO.getProductId())
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
-        // — остальной код без изменений —
+        Optional<CartItem> existingItem = cart.getItems().stream()
+                .filter(item -> item.getProduct().getId().equals(product.getId()))
+                .findFirst();
+
+        if (existingItem.isPresent()) {
+            CartItem item = existingItem.get();
+            item.setQuantity(item.getQuantity() + cartItemDTO.getQuantity());
+            cartItemRepository.save(item);
+        } else {
+            CartItem newItem = new CartItem();
+            newItem.setCart(cart);
+            newItem.setProduct(product);
+            newItem.setQuantity(cartItemDTO.getQuantity());
+            cart.getItems().add(newItem);
+            cartItemRepository.save(newItem);
+        }
 
         return CartDTO.fromEntity(cartRepository.save(cart));
     }
@@ -61,10 +76,21 @@ public class CartService {
     public CartDTO updateCartItem(String email, Long itemId, int quantity) {
         User user = getUserByEmail(email);
         Cart cart = cartRepository
-                .findByUserWithItemsAndProductImages(user)   // ← и здесь
+                .findByUserWithItemsAndProductImages(user)
                 .orElseThrow(() -> new ResourceNotFoundException("Cart not found"));
 
-        // — остальной код без изменений —
+        CartItem item = cart.getItems().stream()
+                .filter(cartItem -> cartItem.getId().equals(itemId))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Cart item not found"));
+
+        if (quantity <= 0) {
+            cart.getItems().remove(item);
+            cartItemRepository.delete(item);
+        } else {
+            item.setQuantity(quantity);
+            cartItemRepository.save(item);
+        }
 
         return CartDTO.fromEntity(cartRepository.save(cart));
     }
@@ -72,10 +98,16 @@ public class CartService {
     public CartDTO removeItemFromCart(String email, Long itemId) {
         User user = getUserByEmail(email);
         Cart cart = cartRepository
-                .findByUserWithItemsAndProductImages(user)   // ← и здесь
+                .findByUserWithItemsAndProductImages(user)
                 .orElseThrow(() -> new ResourceNotFoundException("Cart not found"));
 
-        // — остальной код без изменений —
+        CartItem item = cart.getItems().stream()
+                .filter(cartItem -> cartItem.getId().equals(itemId))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Cart item not found"));
+
+        cart.getItems().remove(item);
+        cartItemRepository.delete(item);
 
         return CartDTO.fromEntity(cartRepository.save(cart));
     }
@@ -119,5 +151,4 @@ public class CartService {
         newCart.setUser(user);
         return cartRepository.save(newCart);
     }
-
 }

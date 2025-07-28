@@ -13,10 +13,12 @@ import java.util.Optional;
 public interface CartRepository extends JpaRepository<Cart, Long> {
     Optional<Cart> findByUser(User user);
 
-    @Query("SELECT c FROM Cart c " +
+    @Query("SELECT DISTINCT c FROM Cart c " +
            "LEFT JOIN FETCH c.items ci " +
            "LEFT JOIN FETCH ci.product p " +
            "LEFT JOIN FETCH p.images " +
+           "LEFT JOIN FETCH p.category " +
+           "LEFT JOIN FETCH p.store " +
            "WHERE c.user = :user")
     Optional<Cart> findByUserWithItemsAndProductImages(@Param("user") User user);
 }
