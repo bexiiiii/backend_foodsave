@@ -96,7 +96,8 @@ public class SecurityConfig {
             "https://partner.foodsave.kz",
             "http://localhost:3000", 
             "http://localhost:3001",
-            "http://192.168.8.147:3000"
+            "http://192.168.8.147:3000",
+            "http://vendor.foodsave.kz"
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList(
