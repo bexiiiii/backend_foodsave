@@ -39,21 +39,29 @@ public class CartItemDTO {
     private BigDecimal total;
     
     public static CartItemDTO fromEntity(CartItem item) {
-        List<String> imageUrls = new ArrayList<>();
-        // Safely access product images to avoid LazyInitializationException
-        if (item.getProduct() != null) {
-            try {
-                // Check if the images collection is initialized
-                List<String> images = item.getProduct().getImages();
-                if (images != null && org.hibernate.Hibernate.isInitialized(images)) {
-                    imageUrls = new ArrayList<>(images);
-                }
-            } catch (Exception e) {
-                // Fallback: leave imageUrls empty if we can't access images
-                imageUrls = new ArrayList<>();
-            }
+        if (item == null) {
+            // Логируем ошибку
+            System.err.println("CartItemDTO.fromEntity: item is null");
+            return null;
         }
-        
+        if (item.getProduct() == null) {
+            System.err.println("CartItemDTO.fromEntity: product is null for cartItem id=" + item.getId());
+            return null;
+        }
+        if (item.getCart() == null) {
+            System.err.println("CartItemDTO.fromEntity: cart is null for cartItem id=" + item.getId());
+            return null;
+        }
+        List<String> imageUrls = new ArrayList<>();
+        try {
+            List<String> images = item.getProduct().getImages();
+            if (images != null && org.hibernate.Hibernate.isInitialized(images)) {
+                imageUrls = new ArrayList<>(images);
+            }
+        } catch (Exception e) {
+            System.err.println("CartItemDTO.fromEntity: error accessing images for product id=" + item.getProduct().getId() + ": " + e.getMessage());
+            imageUrls = new ArrayList<>();
+        }
         return CartItemDTO.builder()
                 .id(item.getId())
                 .cartId(item.getCart().getId())
