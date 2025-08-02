@@ -3,6 +3,10 @@ spring:
     active: dev
   application:
     name: foodsave-backend
+  servlet:
+    multipart:
+      max-file-size: 15MB
+      max-request-size: 15MB
   datasource:
     url: jdbc:h2:mem:testdb
     username: sa

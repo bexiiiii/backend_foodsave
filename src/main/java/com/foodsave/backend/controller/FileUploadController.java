@@ -32,7 +32,7 @@ public class FileUploadController {
     @Value("${app.upload.dir:uploads}")
     private String uploadDir;
 
-    @Value("${app.upload.max-file-size:5242880}") // 5MB
+    @Value("${app.upload.max-file-size:15728640}") // 15MB
     private long maxFileSize;
 
     @Value("${app.base-url:http://localhost:8080}")
@@ -56,7 +56,7 @@ public class FileUploadController {
             // Check file size
             if (file.getSize() > maxFileSize) {
                 return ResponseEntity.badRequest()
-                        .body(Map.of("error", "File size exceeds maximum allowed size (5MB)"));
+                        .body(Map.of("error", "File size exceeds maximum allowed size (15MB)"));
             }
 
             // Check file type
