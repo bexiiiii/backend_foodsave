@@ -124,6 +124,18 @@ public class StoreService {
                     .orElseThrow(() -> new RuntimeException("Owner not found with email: " + ownerEmail));
             store.setOwner(owner);
 
+            // Назначаем менеджера, если указан
+            if (storeDTO.getManagerId() != null) {
+                User manager = userRepository.findById(storeDTO.getManagerId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Manager not found with id: " + storeDTO.getManagerId()));
+                
+                // Изменяем роль пользователя на STORE_MANAGER
+                manager.setRole(com.foodsave.backend.domain.enums.UserRole.STORE_MANAGER);
+                userRepository.save(manager);
+                
+                store.setManager(manager);
+            }
+
             Store savedStore = storeRepository.save(store);
             System.out.println("Store created successfully with ID: " + savedStore.getId());
             
@@ -284,11 +296,15 @@ public class StoreService {
         store.setPhone(dto.getPhone());
         store.setEmail(dto.getEmail());
         store.setLogo(dto.getLogo());
+        store.setCoverImage(dto.getCoverImage());
         store.setOpeningHours(dto.getOpeningHours());
         store.setClosingHours(dto.getClosingHours());
+        store.setLatitude(dto.getLatitude());
+        store.setLongitude(dto.getLongitude());
         store.setCategory(dto.getCategory());
         store.setActive(dto.isActive());
         store.setStatus(dto.getStatus());
+        // Note: manager is handled separately in create/update methods
     }
 
     /**
