@@ -90,6 +90,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT o FROM Order o WHERE o.qrCode = :qrCode")
     Optional<Order> findByQrCode(@Param("qrCode") String qrCode);
 
+    // Check if order number already exists
+    boolean existsByOrderNumber(String orderNumber);
+
     @Query("SELECT o FROM Order o WHERE o.user = :user AND o.store = :store")
     List<Order> findByUserAndStore(@Param("user") User user, @Param("store") Store store);
     

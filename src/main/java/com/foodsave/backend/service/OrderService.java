@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.ArrayList;
+import java.security.SecureRandom;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +43,10 @@ public class OrderService {
     private final SecurityUtil securityUtil;
     private final com.foodsave.backend.repository.UserRepository userRepository;
     private final com.foodsave.backend.repository.StoreRepository storeRepository;
+
+    private static final String ORDER_NUMBER_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    private static final int ORDER_NUMBER_LENGTH = 6;
+    private final SecureRandom random = new SecureRandom();
 
     public List<OrderDTO> getAllOrders() {
         try {
@@ -139,6 +144,23 @@ public class OrderService {
             .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /**
+     * Generates a unique random 6-character alphanumeric order number
+     */
+    private String generateUniqueOrderNumber() {
+        String orderNumber;
+        do {
+            StringBuilder sb = new StringBuilder(ORDER_NUMBER_LENGTH);
+            for (int i = 0; i < ORDER_NUMBER_LENGTH; i++) {
+                int index = random.nextInt(ORDER_NUMBER_CHARS.length());
+                sb.append(ORDER_NUMBER_CHARS.charAt(index));
+            }
+            orderNumber = sb.toString();
+        } while (orderRepository.existsByOrderNumber(orderNumber)); // Ensure uniqueness
+        
+        return orderNumber;
+    }
+
     @Transactional
     public OrderDTO createOrder(OrderDTO orderDTO) {
         log.info("Creating new order: {}", orderDTO);
@@ -152,6 +174,7 @@ public class OrderService {
         Order order = new Order();
         order.setStore(store);
         order.setUser(securityUtils.getCurrentUser());
+        order.setOrderNumber(generateUniqueOrderNumber()); // Generate unique order number
         order.setStatus(OrderStatus.PENDING);
         order.setPaymentMethod(orderDTO.getPaymentMethod());
         order.setContactPhone(orderDTO.getContactPhone());
