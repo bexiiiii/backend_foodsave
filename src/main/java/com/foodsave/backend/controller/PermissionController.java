@@ -22,21 +22,44 @@ public class PermissionController {
     @GetMapping("/user/{userId}")
     @Operation(summary = "Get user permissions", description = "Get permissions for a specific user")
     public ResponseEntity<Set<Permission>> getUserPermissions(@PathVariable Long userId) {
-        // Получаем текущую роль пользователя
-        UserRole currentRole = SecurityUtil.getCurrentUserRole();
-        
-        // Определяем разрешения на основе роли
-        Set<Permission> permissions = getPermissionsForRole(currentRole);
-        
-        return ResponseEntity.ok(permissions);
+        try {
+            // Получаем текущую роль пользователя
+            UserRole currentRole = SecurityUtil.getCurrentUserRole();
+            
+            // Если пользователь не аутентифицирован, возвращаем пустой набор разрешений
+            if (currentRole == null) {
+                return ResponseEntity.ok(Set.of());
+            }
+            
+            // Определяем разрешения на основе роли
+            Set<Permission> permissions = getPermissionsForRole(currentRole);
+            
+            return ResponseEntity.ok(permissions);
+        } catch (Exception e) {
+            // Логируем ошибку и возвращаем пустой набор разрешений
+            System.err.println("Error getting user permissions: " + e.getMessage());
+            return ResponseEntity.ok(Set.of());
+        }
     }
 
     @GetMapping("/current")
     @Operation(summary = "Get current user permissions", description = "Get permissions for the current authenticated user")
     public ResponseEntity<Set<Permission>> getCurrentUserPermissions() {
-        UserRole currentRole = SecurityUtil.getCurrentUserRole();
-        Set<Permission> permissions = getPermissionsForRole(currentRole);
-        return ResponseEntity.ok(permissions);
+        try {
+            UserRole currentRole = SecurityUtil.getCurrentUserRole();
+            
+            // Если пользователь не аутентифицирован, возвращаем пустой набор разрешений
+            if (currentRole == null) {
+                return ResponseEntity.ok(Set.of());
+            }
+            
+            Set<Permission> permissions = getPermissionsForRole(currentRole);
+            return ResponseEntity.ok(permissions);
+        } catch (Exception e) {
+            // Логируем ошибку и возвращаем пустой набор разрешений
+            System.err.println("Error getting current user permissions: " + e.getMessage());
+            return ResponseEntity.ok(Set.of());
+        }
     }
 
     private Set<Permission> getPermissionsForRole(UserRole role) {

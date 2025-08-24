@@ -106,4 +106,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     @Query("SELECT p.status as status, COUNT(p) as count FROM Product p WHERE p.store = :store GROUP BY p.status")
     Map<ProductStatus, Long> countByStoreAndStatus(@Param("store") Store store);
+    
+    // Method for counting products by multiple store IDs
+    @Query("SELECT COUNT(p) FROM Product p WHERE p.store.id IN :storeIds")
+    long countByStoreIdIn(@Param("storeIds") List<Long> storeIds);
 }

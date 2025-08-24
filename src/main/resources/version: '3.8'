@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: foodsave-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://188.225.31.57:5432/foodsave_cloud
+      - SPRING_DATASOURCE_USERNAME=behruz
+      - SPRING_DATASOURCE_PASSWORD=234Bex456
+      - JWT_SECRET=ProductionSecretKey123456789ServerSide
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SPRING_JPA_GENERATE_DDL=true
+      - SPRING_SQL_INIT_MODE=never
+    networks:
+      - foodsave-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  client:
+    build:
+      context: ./clientside_website
+      dockerfile: Dockerfile
+    container_name: foodsave-client
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://188.225.31.57:8080/api
+      - NEXT_PUBLIC_API_BASE_URL=http://188.225.31.57:8080
+    networks:
+      - foodsave-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  admin:
+    build:
+      context: ./frontend/free-nextjs-admin-dashboard
+      dockerfile: Dockerfile
+    container_name: foodsave-admin
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://188.225.31.57:8080/api
+    networks:
+      - foodsave-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+networks:
+  foodsave-network:
+    driver: bridge
