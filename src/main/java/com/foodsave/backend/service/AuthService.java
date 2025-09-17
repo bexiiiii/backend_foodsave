@@ -61,6 +61,7 @@ public class AuthService {
         user.setRole(UserRole.CUSTOMER);
         user.setActive(true);
         user.setEnabled(true);
+        user.setRegistrationSource("WEB");
 
         userRepository.save(user);
 
