@@ -98,6 +98,7 @@ public class SecurityConfig {
             "https://vendor.foodsave.kz",
             "http://localhost:3000", 
             "http://localhost:3001",
+            "http://localhost:3002",
             "http://192.168.8.147:3000",
             "http://vendor.foodsave.kz"
         ));
