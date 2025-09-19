@@ -37,6 +37,9 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .authorizeHttpRequests(auth -> auth
 
+                // Always allow CORS preflight checks
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
                 // Swagger UI
                 .requestMatchers("/swagger-ui/**").permitAll()
                 .requestMatchers("/swagger-ui.html").permitAll()
@@ -96,11 +99,18 @@ public class SecurityConfig {
             "https://admin.foodsave.kz",
             "https://partner.foodsave.kz",
             "https://vendor.foodsave.kz",
-            "http://localhost:3000", 
+            "https://web.telegram.org",
+            "https://miniapp.telegram.org",
+            "https://t.me",
+            "http://localhost:3000",
             "http://localhost:3001",
             "http://localhost:3002",
             "http://192.168.8.147:3000",
             "http://vendor.foodsave.kz"
+        ));
+        configuration.setAllowedOriginPatterns(Arrays.asList(
+            "https://*.foodsave.kz",
+            "https://*.telegram.org"
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList(
