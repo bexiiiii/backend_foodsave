@@ -45,7 +45,7 @@ public class TelegramWebhookService {
     @Value("${telegram.miniapp.base-url:https://miniapp.foodsave.kz}")
     private String miniAppBaseUrl;
 
-    @Value("${telegram.support.username:@FoodSave_kz}")
+    @Value("${telegram.support.username:@FoodSave_bot}")
     private String supportUsername;
 
     private static final DateTimeFormatter RESERVATION_TIME_FORMAT =

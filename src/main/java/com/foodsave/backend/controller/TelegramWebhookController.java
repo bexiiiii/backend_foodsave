@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.GetMapping;
 
 @RestController
 @RequestMapping("/api/telegram")
@@ -22,5 +23,10 @@ public class TelegramWebhookController {
     public ResponseEntity<Void> handleWebhook(@RequestBody TelegramUpdate update) {
         telegramWebhookService.handleUpdate(update);
         return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/webhook")
+    public ResponseEntity<String> webhookHealthcheck() {
+        return ResponseEntity.ok("Telegram webhook endpoint is ready");
     }
 }
