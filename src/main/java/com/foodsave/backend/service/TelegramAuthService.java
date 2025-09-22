@@ -5,12 +5,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.foodsave.backend.domain.enums.UserRole;
 import com.foodsave.backend.dto.AuthResponseDTO;
 import com.foodsave.backend.entity.User;
+import com.foodsave.backend.exception.ApiException;
 import com.foodsave.backend.repository.UserRepository;
 import com.foodsave.backend.security.JwtTokenProvider;
 import com.foodsave.backend.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -20,8 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -119,11 +119,14 @@ public class TelegramAuthService {
                 .toList();
         String dataCheckString = String.join("\n", dataCheckList);
 
-        byte[] secretKey = sha256("WebAppData" + botToken);
+        byte[] secretKey = hmacSha256(
+                "WebAppData".getBytes(StandardCharsets.UTF_8),
+                botToken.getBytes(StandardCharsets.UTF_8)
+        );
         String calculatedHash = hmacSha256Hex(secretKey, dataCheckString);
 
         if (!calculatedHash.equalsIgnoreCase(receivedHash)) {
-            throw new IllegalArgumentException("Invalid Telegram init data hash");
+            throw new ApiException("Invalid Telegram init data hash", HttpStatus.UNAUTHORIZED);
         }
     }
 
@@ -181,21 +184,22 @@ public class TelegramAuthService {
         return base.toLowerCase(Locale.ROOT) + "@telegram.local";
     }
 
-    private byte[] sha256(String data) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return digest.digest(data.getBytes(StandardCharsets.UTF_8));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 algorithm not available", e);
-        }
-    }
-
     private String hmacSha256Hex(byte[] key, String data) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(key, "HmacSHA256"));
             byte[] result = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
             return bytesToHex(result);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to compute HMAC-SHA256", e);
+        }
+    }
+
+    private byte[] hmacSha256(byte[] key, byte[] data) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(key, "HmacSHA256"));
+            return mac.doFinal(data);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to compute HMAC-SHA256", e);
         }
