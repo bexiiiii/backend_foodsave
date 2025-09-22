@@ -7,15 +7,28 @@ import com.foodsave.backend.dto.telegram.TelegramMessage;
 import com.foodsave.backend.dto.telegram.TelegramUpdate;
 import com.foodsave.backend.dto.telegram.TelegramUser;
 import com.foodsave.backend.dto.telegram.TelegramWebAppData;
+import com.foodsave.backend.entity.Order;
+import com.foodsave.backend.entity.OrderItem;
+import com.foodsave.backend.entity.Product;
+import com.foodsave.backend.entity.Store;
+import com.foodsave.backend.entity.User;
+import com.foodsave.backend.domain.enums.OrderStatus;
+import com.foodsave.backend.domain.enums.PaymentMethod;
+import com.foodsave.backend.domain.enums.PaymentStatus;
+import com.foodsave.backend.repository.OrderRepository;
+import com.foodsave.backend.repository.ProductRepository;
+import com.foodsave.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.concurrent.ThreadLocalRandom;
+import java.math.BigDecimal;
 
 @Service
 @RequiredArgsConstructor
@@ -24,6 +37,10 @@ public class TelegramWebhookService {
 
     private final TelegramBotService telegramBotService;
     private final ObjectMapper objectMapper;
+    private final UserRepository userRepository;
+    private final ProductRepository productRepository;
+    private final OrderRepository orderRepository;
+    private final ProductService productService;
 
     @Value("${telegram.miniapp.base-url:https://miniapp.foodsave.kz}")
     private String miniAppBaseUrl;
@@ -34,6 +51,7 @@ public class TelegramWebhookService {
     private static final DateTimeFormatter RESERVATION_TIME_FORMAT =
             DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm", new Locale("ru"));
 
+    @Transactional
     public void handleUpdate(TelegramUpdate update) {
         if (update == null) {
             return;
@@ -128,12 +146,14 @@ public class TelegramWebhookService {
             return;
         }
 
-        if (trimmed.startsWith("/start")) {
+        String command = trimmed.split("\\s+")[0];
+
+        if (command.equalsIgnoreCase("/start") || command.toLowerCase(Locale.ROOT).startsWith("/start@")) {
             sendWelcomeMessage(chatId);
             return;
         }
 
-        if (trimmed.startsWith("/help")) {
+        if (command.equalsIgnoreCase("/help") || command.toLowerCase(Locale.ROOT).startsWith("/help@")) {
             sendSupportMessage(chatId);
             return;
         }
@@ -172,26 +192,43 @@ public class TelegramWebhookService {
     }
 
     private void respondToReservation(Long chatId, TelegramUser from, ReservationPayload payload) {
-        String orderNumber = generateOrderNumber();
+        ReservationResult reservationResult = createReservationOrder(from, payload);
+        if (!reservationResult.success()) {
+            telegramBotService.sendMessage(chatId, new TelegramBotService.TelegramMessagePayload(
+                    reservationResult.errorMessage(),
+                    null,
+                    null,
+                    null
+            ));
+            return;
+        }
+
+        Order order = reservationResult.order();
         String reserverName = from != null ? from.displayName() : "вас";
-        String formattedTotal = formatPrice(payload.totalPrice());
-        String formattedUnit = formatPrice(payload.unitPrice());
+        String formattedTotal = formatPrice(order.getTotal().doubleValue());
+        String formattedUnit = formatPrice(order.getItems().get(0).getUnitPrice().doubleValue());
         String formattedTime = formatTimestamp(payload.timestamp());
 
+        Product product = reservationResult.product();
+        Store store = product.getStore();
+
         StringBuilder messageBuilder = new StringBuilder();
-        messageBuilder.append("🧾 Заказ №").append(orderNumber).append("\n");
-        messageBuilder.append("Коробка: ").append(orUnknown(payload.productName())).append("\n");
-        messageBuilder.append("Магазин: ").append(orUnknown(payload.storeName())).append("\n");
-        messageBuilder.append("Количество: ").append(payload.quantity()).append(" шт.").append("\n");
+        messageBuilder.append("🧾 Заказ №").append(order.getOrderNumber()).append("\n");
+        messageBuilder.append("Коробка: ").append(orUnknown(product.getName())).append("\n");
+        messageBuilder.append("Магазин: ").append(orUnknown(store.getName())).append("\n");
+        if (store.getAddress() != null && !store.getAddress().isBlank()) {
+            messageBuilder.append("Адрес: ").append(store.getAddress()).append("\n");
+        }
+        messageBuilder.append("Количество: ").append(order.getItems().get(0).getQuantity()).append(" шт.").append("\n");
         messageBuilder.append("Цена за шт.: ").append(formattedUnit).append("\n");
-        messageBuilder.append("Сумма: ").append(formattedTotal).append("\n\n");
-        messageBuilder.append("Заказ забронирован для ").append(reserverName).append(".");
+        messageBuilder.append("Сумма: ").append(formattedTotal).append("\n");
+        messageBuilder.append("Статус: ожидает подтверждения");
 
         if (formattedTime != null) {
             messageBuilder.append("\nВремя бронирования: ").append(formattedTime);
         }
 
-        messageBuilder.append("\n\nМы свяжемся с заведением и напомним вам о заказе. Если появятся вопросы — команда поддержки поможет по команде /help.");
+        messageBuilder.append("\n\nЗаказ закреплён за ").append(reserverName).append(". Мы сообщим заведению и пришлём уведомление, когда коробка будет готова к выдаче. Если появятся вопросы — используйте команду /help.");
 
         telegramBotService.sendMessage(chatId, new TelegramBotService.TelegramMessagePayload(
                 messageBuilder.toString(),
@@ -252,5 +289,82 @@ public class TelegramWebhookService {
             String timestamp,
             String message
     ) {
+    }
+
+    private record ReservationResult(boolean success, Order order, Product product, String errorMessage) {
+    }
+
+    private ReservationResult createReservationOrder(TelegramUser from, ReservationPayload payload) {
+        if (payload.productId() == null) {
+            return new ReservationResult(false, null, null, "Не удалось определить продукт для бронирования. Пожалуйста, обновите мини‑приложение и попробуйте снова.");
+        }
+
+        Product product = productRepository.findById(payload.productId())
+                .orElse(null);
+
+        if (product == null) {
+            return new ReservationResult(false, null, null, "Выбранный продукт больше не доступен. Попробуйте выбрать другую коробку.");
+        }
+
+        if (!productService.hasSufficientStock(product.getId(), Math.max(payload.quantity(), 1))) {
+            return new ReservationResult(false, null, product, "Упс! Коробка уже закончилась. Выберите, пожалуйста, другую позицию.");
+        }
+
+        User user = null;
+        if (from != null && from.id() != null) {
+            user = userRepository.findByTelegramUserId(from.id()).orElse(null);
+        }
+
+        if (user == null) {
+            return new ReservationResult(false, null, product, "Не удалось найти ваш профиль. Откройте мини‑приложение FoodSave ещё раз через кнопку бота и повторите попытку.");
+        }
+
+        Order order = new Order();
+        order.setUser(user);
+        order.setStore(product.getStore());
+        order.setOrderNumber(generateUniqueOrderNumber());
+        order.setStatus(OrderStatus.PENDING);
+        order.setPaymentStatus(PaymentStatus.PENDING);
+        order.setPaymentMethod(PaymentMethod.CASH);
+        order.setContactPhone(orFallbackPhone(user.getPhone()));
+        order.setDeliveryAddress(product.getStore() != null ? product.getStore().getAddress() : null);
+        order.setDeliveryNotes(payload.message() != null ? payload.message() : "Telegram бронирование");
+
+        OrderItem item = new OrderItem();
+        item.setOrder(order);
+        item.setProduct(product);
+        item.setQuantity(Math.max(payload.quantity(), 1));
+        BigDecimal unitPrice = BigDecimal.valueOf(payload.unitPrice() > 0 ? payload.unitPrice() : product.getPrice());
+        item.setUnitPrice(unitPrice);
+        item.calculateTotalPrice();
+
+        order.addItem(item);
+        order.calculateTotals();
+
+        try {
+            productService.reduceStockQuantity(product.getId(), item.getQuantity());
+        } catch (Exception ex) {
+            log.error("Failed to reserve stock for product {}", product.getId(), ex);
+            return new ReservationResult(false, null, product, "Не удалось забронировать коробку: остатков недостаточно. Попробуйте выбрать другой товар.");
+        }
+
+        Order savedOrder = orderRepository.save(order);
+
+        return new ReservationResult(true, savedOrder, product, null);
+    }
+
+    private String generateUniqueOrderNumber() {
+        String orderNumber;
+        do {
+            orderNumber = generateOrderNumber();
+        } while (orderRepository.existsByOrderNumber(orderNumber));
+        return orderNumber;
+    }
+
+    private String orFallbackPhone(String phone) {
+        if (phone == null || phone.isBlank()) {
+            return "+7 000 000 0000";
+        }
+        return phone;
     }
 }
