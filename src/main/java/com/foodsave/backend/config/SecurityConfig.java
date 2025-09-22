@@ -49,6 +49,7 @@ public class SecurityConfig {
                 
                 // Auth endpoints
                 .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/telegram/**").permitAll()
                 .requestMatchers("/api/users/**").permitAll()
                 .requestMatchers("/api/permissions/**").permitAll() // Временно для тестирования
                 

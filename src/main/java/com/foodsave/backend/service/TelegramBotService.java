@@ -72,7 +72,14 @@ public class TelegramBotService {
         if (message.buttonText() != null && message.buttonUrl() != null) {
             Map<String, Object> button = new HashMap<>();
             button.put("text", message.buttonText());
-            button.put("url", message.buttonUrl());
+
+            String buttonUrl = message.buttonUrl();
+            String miniAppUrl = ensureHttps(miniAppBaseUrl);
+            if (miniAppUrl != null && buttonUrl.startsWith(miniAppUrl)) {
+                button.put("web_app", Map.of("url", buttonUrl));
+            } else {
+                button.put("url", buttonUrl);
+            }
 
             Map<String, Object> replyMarkup = Map.of(
                     "inline_keyboard",
@@ -89,6 +96,48 @@ public class TelegramBotService {
         }
     }
 
+    public void sendWebAppMessage(Long chatId, String text, String buttonText, String webAppUrl) {
+        if (botToken == null || botToken.isBlank()) {
+            log.warn("Telegram bot token is not configured");
+            return;
+        }
+        if (chatId == null) {
+            log.warn("Cannot send Telegram message without chat id");
+            return;
+        }
+        if (text == null || text.isBlank()) {
+            log.warn("Telegram message text is empty");
+            return;
+        }
+        if (buttonText == null || buttonText.isBlank() || webAppUrl == null || webAppUrl.isBlank()) {
+            log.warn("WebApp button requires non-empty text and url");
+            return;
+        }
+
+        String url = "https://api.telegram.org/bot" + botToken + "/sendMessage";
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("chat_id", chatId);
+        payload.put("text", text);
+        payload.put("parse_mode", "HTML");
+
+        Map<String, Object> button = new HashMap<>();
+        button.put("text", buttonText);
+        button.put("web_app", Map.of("url", webAppUrl));
+
+        payload.put("reply_markup", Map.of(
+                "inline_keyboard",
+                List.of(List.of(button))
+        ));
+
+        try {
+            ResponseEntity<String> response = getRestTemplate().postForEntity(url, payload, String.class);
+            log.debug("Telegram sendWebAppMessage status: {}", response.getStatusCodeValue());
+        } catch (Exception e) {
+            log.error("Failed to send Telegram web app message", e);
+        }
+    }
+
     public String resolveButtonUrl(String rawUrl) {
         if (rawUrl == null || rawUrl.isBlank()) {
             return null;
@@ -97,15 +146,30 @@ public class TelegramBotService {
         if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
             return trimmed;
         }
-        if (miniAppBaseUrl == null || miniAppBaseUrl.isBlank()) {
+        String base = ensureHttps(miniAppBaseUrl);
+        if (base == null) {
             log.warn("Mini app base URL is not configured, returning raw button path");
             return trimmed.startsWith("/") ? trimmed : "/" + trimmed;
         }
 
-        String base = miniAppBaseUrl.endsWith("/")
-                ? miniAppBaseUrl.substring(0, miniAppBaseUrl.length() - 1)
-                : miniAppBaseUrl;
+        if (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
         String path = trimmed.startsWith("/") ? trimmed : "/" + trimmed;
         return base + path;
+    }
+
+    private String ensureHttps(String url) {
+        if (url == null || url.isBlank()) {
+            return null;
+        }
+        String trimmed = url.trim();
+        if (trimmed.startsWith("http://")) {
+            return "https://" + trimmed.substring(7);
+        }
+        if (!trimmed.startsWith("https://")) {
+            return "https://" + trimmed;
+        }
+        return trimmed;
     }
 }
