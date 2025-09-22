@@ -334,7 +334,11 @@ public class TelegramWebhookService {
         item.setOrder(order);
         item.setProduct(product);
         item.setQuantity(Math.max(payload.quantity(), 1));
-        BigDecimal unitPrice = BigDecimal.valueOf(payload.unitPrice() > 0 ? payload.unitPrice() : product.getPrice());
+
+        BigDecimal unitPrice = payload.unitPrice() > 0
+                ? BigDecimal.valueOf(payload.unitPrice())
+                : (product.getPrice() != null ? product.getPrice() : BigDecimal.ZERO);
+
         item.setUnitPrice(unitPrice);
         item.calculateTotalPrice();
 
