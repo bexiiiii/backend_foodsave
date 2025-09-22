@@ -57,6 +57,12 @@ public class TelegramWebhookService {
             return;
         }
 
+        log.info("Received Telegram update: messageId={}, hasCallback={}, hasWebAppData={}",
+                update.message() != null ? update.message().messageId() : null,
+                update.callbackQuery() != null,
+                (update.message() != null && update.message().webAppData() != null)
+                        || (update.callbackQuery() != null && update.callbackQuery().webAppData() != null));
+
         TelegramMessage message = resolveMessage(update);
         TelegramUser from = resolveUser(update);
         Long chatId = resolveChatId(message);
@@ -127,6 +133,8 @@ public class TelegramWebhookService {
 
         try {
             ReservationPayload payload = objectMapper.readValue(webAppData.data(), ReservationPayload.class);
+            log.info("Processing web_app_data reservation for chat {}: action={}, productId={}, quantity={}",
+                    chatId, payload.action(), payload.productId(), payload.quantity());
             respondToReservation(chatId, from, payload);
         } catch (Exception e) {
             log.error("Failed to parse web_app_data: {}", webAppData.data(), e);
@@ -147,6 +155,9 @@ public class TelegramWebhookService {
         }
 
         String command = trimmed.split("\\s+")[0];
+
+        log.info("Handling text command '{}' from chat {} (user={})", command, chatId,
+                from != null ? from.id() : null);
 
         if (command.equalsIgnoreCase("/start") || command.toLowerCase(Locale.ROOT).startsWith("/start@")) {
             sendWelcomeMessage(chatId);
@@ -236,6 +247,10 @@ public class TelegramWebhookService {
                 null,
                 null
         ));
+
+        User user = order.getUser();
+        log.info("Reservation confirmation sent for order {} (telegram user={}, chat={})",
+                order.getOrderNumber(), user != null ? user.getId() : null, chatId);
     }
 
     private String formatPrice(double value) {
@@ -307,6 +322,8 @@ public class TelegramWebhookService {
         }
 
         if (!productService.hasSufficientStock(product.getId(), Math.max(payload.quantity(), 1))) {
+            log.warn("Insufficient stock for product {} (requested {}, available {})",
+                    product.getId(), Math.max(payload.quantity(), 1), product.getStockQuantity());
             return new ReservationResult(false, null, product, "Упс! Коробка уже закончилась. Выберите, пожалуйста, другую позицию.");
         }
 
@@ -316,6 +333,8 @@ public class TelegramWebhookService {
         }
 
         if (user == null) {
+            log.warn("Reservation attempted without linked user. telegramId={} payload={}" ,
+                    from != null ? from.id() : null, payload);
             return new ReservationResult(false, null, product, "Не удалось найти ваш профиль. Откройте мини‑приложение FoodSave ещё раз через кнопку бота и повторите попытку.");
         }
 
@@ -353,6 +372,10 @@ public class TelegramWebhookService {
         }
 
         Order savedOrder = orderRepository.save(order);
+
+        log.info("Order {} successfully saved for telegram user {} (product {} store {})",
+                savedOrder.getOrderNumber(), user.getId(), product.getId(),
+                product.getStore() != null ? product.getStore().getId() : null);
 
         return new ReservationResult(true, savedOrder, product, null);
     }
