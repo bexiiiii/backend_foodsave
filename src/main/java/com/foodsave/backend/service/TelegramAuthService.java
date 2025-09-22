@@ -62,13 +62,23 @@ public class TelegramAuthService {
         User user = userRepository.findByTelegramUserId(telegramUserInfo.id())
                 .orElseGet(() -> createTelegramUser(telegramUserInfo));
 
-        user.setFirstName(telegramUserInfo.firstName() != null ? telegramUserInfo.firstName() : user.getFirstName());
-        if (telegramUserInfo.lastName() != null) {
-            user.setLastName(telegramUserInfo.lastName());
-        }
-        user.setTelegramUsername(telegramUserInfo.username());
+        String firstName = coalesceNonBlank(
+                telegramUserInfo.firstName(),
+                user.getFirstName(),
+                "Telegram"
+        );
+        user.setFirstName(firstName);
+
+        String lastName = coalesceNonBlank(
+                telegramUserInfo.lastName(),
+                user.getLastName(),
+                firstName,
+                "User"
+        );
+        user.setLastName(lastName);
+        user.setTelegramUsername(coalesceNonBlank(telegramUserInfo.username(), user.getTelegramUsername()));
         user.setTelegramPhotoUrl(telegramUserInfo.photoUrl());
-        user.setTelegramLanguageCode(telegramUserInfo.languageCode());
+        user.setTelegramLanguageCode(coalesceNonBlank(telegramUserInfo.languageCode(), user.getTelegramLanguageCode()));
         user.setTelegramDataRaw(initData);
         if (user.getEmail() == null || user.getEmail().isBlank()) {
             user.setEmail(generateEmail(telegramUserInfo));
@@ -164,11 +174,10 @@ public class TelegramAuthService {
     private User createTelegramUser(TelegramUserInfo info) {
         User user = new User();
         user.setTelegramUserId(info.id());
-        user.setFirstName(info.firstName() != null ? info.firstName() : "Telegram");
-        String fallbackLastName = info.lastName() != null
-                ? info.lastName()
-                : (info.firstName() != null ? info.firstName() : "User");
-        user.setLastName(fallbackLastName);
+        String firstName = coalesceNonBlank(info.firstName(), "Telegram");
+        user.setFirstName(firstName);
+        String lastName = coalesceNonBlank(info.lastName(), firstName, "User");
+        user.setLastName(lastName);
         user.setEmail(generateEmail(info));
         user.setRole(UserRole.CUSTOMER);
         user.setActive(true);
@@ -180,7 +189,7 @@ public class TelegramAuthService {
     }
 
     private String generateEmail(TelegramUserInfo info) {
-        String base = info.username() != null ? info.username() : "telegram" + info.id();
+        String base = coalesceNonBlank(info.username(), "telegram" + info.id());
         return base.toLowerCase(Locale.ROOT) + "@telegram.local";
     }
 
@@ -223,5 +232,14 @@ public class TelegramAuthService {
                                     String username,
                                     String languageCode,
                                     String photoUrl) {
+    }
+
+    private String coalesceNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 }
