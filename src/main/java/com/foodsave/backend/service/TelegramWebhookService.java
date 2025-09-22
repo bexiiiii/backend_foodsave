@@ -282,7 +282,7 @@ public class TelegramWebhookService {
 
     private String generateOrderNumber() {
         int random = ThreadLocalRandom.current().nextInt(0, 1_000_000);
-        return String.format("FS-%06d", random);
+        return String.format("%06d", random);
     }
 
     private String orUnknown(String value) {
