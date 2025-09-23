@@ -19,7 +19,8 @@ public class CacheCleanup {
     private static final List<String> DEPRECATED_CACHES = List.of(
             "storeProductsCache",
             "featuredProductsCache",
-            "discountedProductsCache"
+            "discountedProductsCache",
+            "productByIdCache"
     );
 
     @PostConstruct

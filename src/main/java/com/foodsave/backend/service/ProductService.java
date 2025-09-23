@@ -105,7 +105,6 @@ public class ProductService {
         return null;
     }
 
-    @Cacheable(cacheNames = PRODUCT_BY_ID_CACHE, key = "#id")
     public ProductDTO getProductById(Long id) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found"));
