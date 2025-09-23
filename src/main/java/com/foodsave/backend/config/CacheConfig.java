@@ -44,9 +44,6 @@ public class CacheConfig {
                                                RedisCacheConfiguration redisCacheConfiguration) {
         Map<String, RedisCacheConfiguration> cacheConfigurations = new HashMap<>();
         cacheConfigurations.put("productByIdCache", redisCacheConfiguration.entryTtl(Duration.ofMinutes(5)));
-        cacheConfigurations.put("storeProductsCache", redisCacheConfiguration.entryTtl(Duration.ofMinutes(1)));
-        cacheConfigurations.put("featuredProductsCache", redisCacheConfiguration.entryTtl(Duration.ofMinutes(1)));
-        cacheConfigurations.put("discountedProductsCache", redisCacheConfiguration.entryTtl(Duration.ofMinutes(1)));
         cacheConfigurations.put("productCategoriesCache", redisCacheConfiguration.entryTtl(Duration.ofHours(1)));
 
         return RedisCacheManager.builder(connectionFactory)
