@@ -10,9 +10,9 @@ import com.foodsave.backend.entity.OrderItem;
 import com.foodsave.backend.entity.Product;
 import com.foodsave.backend.entity.Store;
 import com.foodsave.backend.entity.User;
+import com.foodsave.backend.exception.InsufficientStockException;
 import com.foodsave.backend.exception.ResourceNotFoundException;
 import com.foodsave.backend.repository.OrderRepository;
-import com.foodsave.backend.repository.ProductRepository;
 import com.foodsave.backend.security.SecurityUtils;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -21,9 +21,11 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.concurrent.ThreadLocalRandom;
+import jakarta.persistence.EntityNotFoundException;
 
 @Service
 @RequiredArgsConstructor
@@ -31,29 +33,20 @@ import java.util.concurrent.ThreadLocalRandom;
 public class MiniAppReservationService {
 
     private static final DateTimeFormatter RESERVATION_TIME_FORMAT = DateTimeFormatter.ofPattern("d MMMM HH:mm", new Locale("ru"));
+    private static final ZoneId DEFAULT_TIME_ZONE = ZoneId.of("Asia/Almaty");
 
     private final OrderRepository orderRepository;
-    private final ProductRepository productRepository;
     private final ProductService productService;
     private final SecurityUtils securityUtils;
     private final TelegramBotService telegramBotService;
 
-@Transactional
-public OrderDTO createReservation(MiniAppReservationRequest request) {
-        int quantity = request == null ? 1 : request.normalizedQuantity();
+    @Transactional
+    public OrderDTO createReservation(MiniAppReservationRequest request) {
+        int quantity = request == null ? 1 : Math.max(1, request.normalizedQuantity());
         Long productId = request != null ? request.productId() : null;
 
         if (productId == null) {
             throw new IllegalArgumentException("Product id is required for reservation");
-        }
-
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
-
-        if (!productService.hasSufficientStock(product.getId(), quantity)) {
-            log.warn("Insufficient stock for product {} (requested={}, available={})",
-                    product.getId(), quantity, product.getStockQuantity());
-            throw new IllegalArgumentException("Недостаточно коробок на складе. Попробуйте уменьшить количество или выбрать другой продукт.");
         }
 
         User user = securityUtils.getCurrentUser();
@@ -64,6 +57,16 @@ public OrderDTO createReservation(MiniAppReservationRequest request) {
         if (user.getTelegramUserId() == null) {
             log.warn("Mini-app reservation requested by user {} without linked telegram id", user.getId());
             throw new IllegalStateException("Не удалось найти ваш Telegram профиль. Откройте FoodSave Mini App из бота и попробуйте снова.");
+        }
+
+        Product product;
+        try {
+            product = productService.reserveProductStock(productId, quantity);
+        } catch (EntityNotFoundException ex) {
+            throw new ResourceNotFoundException("Product not found with id: " + productId);
+        } catch (InsufficientStockException ex) {
+            log.warn("Insufficient stock for product {} (requested={})", productId, quantity);
+            throw new IllegalArgumentException("Недостаточно коробок на складе. Попробуйте уменьшить количество или выбрать другой продукт.");
         }
 
         Order order = new Order();
@@ -90,13 +93,6 @@ public OrderDTO createReservation(MiniAppReservationRequest request) {
 
         order.addItem(item);
         order.calculateTotals();
-
-        try {
-            productService.reduceStockQuantity(product.getId(), quantity);
-        } catch (Exception ex) {
-            log.error("Failed to reduce stock for product {} during reservation", product.getId(), ex);
-            throw new IllegalStateException("Не удалось забронировать коробку: остатков недостаточно. Попробуйте выбрать другой товар.");
-        }
 
         Order savedOrder = orderRepository.save(order);
         log.info("Mini-app reservation order {} created for user {} (product {} store {})",
@@ -142,14 +138,14 @@ public OrderDTO createReservation(MiniAppReservationRequest request) {
         messageBuilder.append("Количество: ").append(quantity).append(" шт.\n");
         messageBuilder.append("Цена за шт.: ").append(formattedUnit).append("\n");
         messageBuilder.append("Сумма: ").append(formattedTotal).append("\n");
-        messageBuilder.append("Статус: ожидает подтверждения\n");
+       
 
-        String formattedTime = RESERVATION_TIME_FORMAT.format(LocalDateTime.now());
+        String formattedTime = RESERVATION_TIME_FORMAT.format(LocalDateTime.now(DEFAULT_TIME_ZONE));
         messageBuilder.append("Время бронирования: ").append(formattedTime);
 
         String reserverName = user.getFirstName() != null ? user.getFirstName() : "вас";
         messageBuilder.append("\n\nЗаказ закреплён за ").append(reserverName)
-                .append(". Мы сообщим заведению и пришлём уведомление, когда коробка будет готова к выдаче. Если появятся вопросы — используйте команду /help.");
+                .append(".  Если появятся вопросы — используйте команду /help.");
 
         return messageBuilder.toString();
     }

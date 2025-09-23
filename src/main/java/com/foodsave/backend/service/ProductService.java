@@ -4,6 +4,7 @@ import com.foodsave.backend.entity.Product;
 import com.foodsave.backend.entity.Store;
 import com.foodsave.backend.entity.Category;
 import com.foodsave.backend.dto.ProductDTO;
+import com.foodsave.backend.exception.InsufficientStockException;
 import com.foodsave.backend.repository.ProductRepository;
 import com.foodsave.backend.repository.StoreRepository;
 import com.foodsave.backend.repository.CategoryRepository;
@@ -12,6 +13,9 @@ import com.foodsave.backend.util.SecurityUtil;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -26,6 +30,12 @@ import java.util.stream.Collectors;
 @Transactional
 @Slf4j
 public class ProductService {
+
+    private static final String PRODUCT_BY_ID_CACHE = "productByIdCache";
+    private static final String STORE_PRODUCTS_CACHE = "storeProductsCache";
+    private static final String FEATURED_PRODUCTS_CACHE = "featuredProductsCache";
+    private static final String DISCOUNTED_PRODUCTS_CACHE = "discountedProductsCache";
+    private static final String PRODUCT_CATEGORIES_CACHE = "productCategoriesCache";
 
     private final ProductRepository productRepository;
     private final StoreRepository storeRepository;
@@ -95,12 +105,15 @@ public class ProductService {
         return null;
     }
 
+    @Cacheable(cacheNames = PRODUCT_BY_ID_CACHE, key = "#id")
     public ProductDTO getProductById(Long id) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found"));
         return convertToDTO(product);
     }
 
+    @Cacheable(cacheNames = STORE_PRODUCTS_CACHE,
+            key = "#storeId + ':' + #pageable.pageNumber + ':' + #pageable.pageSize + ':' + #pageable.sort.toString()")
     public Page<ProductDTO> getProductsByStore(Long storeId, Pageable pageable) {
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new EntityNotFoundException("Store not found"));
@@ -108,17 +121,27 @@ public class ProductService {
                 .map(this::convertToDTO);
     }
 
+    @Cacheable(cacheNames = PRODUCT_CATEGORIES_CACHE, key = "'ALL'")
     public List<String> getAllCategories() {
         return categoryRepository.findAll().stream()
                 .map(Category::getName)
                 .collect(Collectors.toList());
     }
 
+    @Cacheable(cacheNames = FEATURED_PRODUCTS_CACHE,
+            key = "#pageable.pageNumber + ':' + #pageable.pageSize + ':' + #pageable.sort.toString()")
     public Page<ProductDTO> getFeaturedProducts(Pageable pageable) {
         return productRepository.findByDiscountPercentageGreaterThan(0.0, pageable)
                 .map(this::convertToDTO);
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = PRODUCT_BY_ID_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = STORE_PRODUCTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = FEATURED_PRODUCTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = DISCOUNTED_PRODUCTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = PRODUCT_CATEGORIES_CACHE, allEntries = true)
+    })
     public ProductDTO createProduct(ProductDTO productDTO) {
         Store store = storeRepository.findById(productDTO.getStoreId())
                 .orElseThrow(() -> new EntityNotFoundException("Store not found"));
@@ -132,6 +155,12 @@ public class ProductService {
         return convertToDTO(productRepository.save(product));
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = PRODUCT_BY_ID_CACHE, key = "#id"),
+            @CacheEvict(cacheNames = STORE_PRODUCTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = FEATURED_PRODUCTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = DISCOUNTED_PRODUCTS_CACHE, allEntries = true)
+    })
     public ProductDTO updateProduct(Long id, ProductDTO productDTO) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found"));
@@ -143,6 +172,12 @@ public class ProductService {
         return convertToDTO(productRepository.save(product));
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = PRODUCT_BY_ID_CACHE, key = "#id"),
+            @CacheEvict(cacheNames = STORE_PRODUCTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = FEATURED_PRODUCTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = DISCOUNTED_PRODUCTS_CACHE, allEntries = true)
+    })
     public void deleteProduct(Long id) {
         productRepository.deleteById(id);
     }
@@ -159,6 +194,8 @@ public class ProductService {
                 .map(this::convertToDTO);
     }
 
+    @Cacheable(cacheNames = DISCOUNTED_PRODUCTS_CACHE,
+            key = "#pageable.pageNumber + ':' + #pageable.pageSize + ':' + #pageable.sort.toString()")
     public Page<ProductDTO> getDiscountedProducts(Pageable pageable) {
         return productRepository.findByDiscountPercentageGreaterThan(0.0, pageable)
                 .map(this::convertToDTO);
@@ -174,6 +211,12 @@ public class ProductService {
                 .map(this::convertToDTO);
     }
 
+    @Caching(evict = {
+            @CacheEvict(cacheNames = PRODUCT_BY_ID_CACHE, key = "#id"),
+            @CacheEvict(cacheNames = STORE_PRODUCTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = FEATURED_PRODUCTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = DISCOUNTED_PRODUCTS_CACHE, allEntries = true)
+    })
     public ProductDTO updateProductStatus(Long id, ProductStatus status) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found"));
@@ -184,6 +227,12 @@ public class ProductService {
     /**
      * Update stock quantity for a product
      */
+    @Caching(evict = {
+            @CacheEvict(cacheNames = PRODUCT_BY_ID_CACHE, key = "#productId"),
+            @CacheEvict(cacheNames = STORE_PRODUCTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = FEATURED_PRODUCTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = DISCOUNTED_PRODUCTS_CACHE, allEntries = true)
+    })
     public ProductDTO updateStockQuantity(Long productId, Integer newQuantity) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found"));
@@ -199,17 +248,27 @@ public class ProductService {
     /**
      * Reduce stock quantity by specified amount
      */
+    @Deprecated
+    @Caching(evict = {
+            @CacheEvict(cacheNames = PRODUCT_BY_ID_CACHE, key = "#productId"),
+            @CacheEvict(cacheNames = STORE_PRODUCTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = FEATURED_PRODUCTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = DISCOUNTED_PRODUCTS_CACHE, allEntries = true)
+    })
     public ProductDTO reduceStockQuantity(Long productId, Integer quantity) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new EntityNotFoundException("Product not found"));
-        
-        if (product.getStockQuantity() < quantity) {
-            throw new IllegalArgumentException("Insufficient stock. Available: " + 
-                product.getStockQuantity() + ", Requested: " + quantity);
-        }
-        
-        product.setStockQuantity(product.getStockQuantity() - quantity);
-        return convertToDTO(productRepository.save(product));
+        int normalizedQuantity = (quantity != null && quantity > 0) ? quantity : 1;
+        Product product = decreaseStockWithLock(productId, normalizedQuantity);
+        return convertToDTO(product);
+    }
+
+    @Caching(evict = {
+            @CacheEvict(cacheNames = PRODUCT_BY_ID_CACHE, key = "#productId"),
+            @CacheEvict(cacheNames = STORE_PRODUCTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = FEATURED_PRODUCTS_CACHE, allEntries = true),
+            @CacheEvict(cacheNames = DISCOUNTED_PRODUCTS_CACHE, allEntries = true)
+    })
+    public Product reserveProductStock(Long productId, int quantity) {
+        return decreaseStockWithLock(productId, quantity);
     }
 
     /**
@@ -218,7 +277,29 @@ public class ProductService {
     public boolean hasSufficientStock(Long productId, Integer requiredQuantity) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found"));
-        return product.getStockQuantity() >= requiredQuantity;
+        int requested = requiredQuantity != null ? requiredQuantity : 0;
+        int available = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
+        return available >= requested;
+    }
+
+    private Product decreaseStockWithLock(Long productId, int quantity) {
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Requested quantity must be greater than zero");
+        }
+
+        Product product = productRepository.findByIdForUpdate(productId)
+                .orElseThrow(() -> new EntityNotFoundException("Product not found"));
+
+        int currentStock = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
+        if (currentStock < quantity) {
+            log.warn("Insufficient stock for product {} (requested={}, available={})",
+                    productId, quantity, currentStock);
+            throw new InsufficientStockException(String.format(
+                    "Недостаточно остатков: доступно %d, запрошено %d", currentStock, quantity));
+        }
+
+        product.setStockQuantity(currentStock - quantity);
+        return productRepository.save(product);
     }
 
     private ProductDTO convertToDTO(Product product) {

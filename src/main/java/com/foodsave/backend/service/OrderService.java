@@ -14,6 +14,7 @@ import com.foodsave.backend.entity.OrderItem;
 import com.foodsave.backend.entity.Product;
 import com.foodsave.backend.repository.OrderRepository;
 import com.foodsave.backend.repository.ProductRepository;
+import com.foodsave.backend.exception.InsufficientStockException;
 import com.foodsave.backend.exception.ResourceNotFoundException;
 import com.foodsave.backend.security.SecurityUtils;
 import com.foodsave.backend.util.SecurityUtil;
@@ -29,6 +30,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.ArrayList;
 import java.security.SecureRandom;
+import jakarta.persistence.EntityNotFoundException;
 
 @Service
 @RequiredArgsConstructor
@@ -165,14 +167,8 @@ public class OrderService {
     public OrderDTO createOrder(OrderDTO orderDTO) {
         log.info("Creating new order: {}", orderDTO);
         
-        // Validate store exists
-        Store store = productRepository.findById(orderDTO.getItems().get(0).getProductId())
-            .orElseThrow(() -> new ResourceNotFoundException("Store not found with id: " + orderDTO.getItems().get(0).getProductId()))
-            .getStore();
-        
         // Create order
         Order order = new Order();
-        order.setStore(store);
         order.setUser(securityUtils.getCurrentUser());
         order.setOrderNumber(generateUniqueOrderNumber()); // Generate unique order number
         order.setStatus(OrderStatus.PENDING);
@@ -180,26 +176,33 @@ public class OrderService {
         order.setContactPhone(orderDTO.getContactPhone());
         order.setDeliveryAddress(orderDTO.getDeliveryAddress());
         order.setDeliveryNotes(orderDTO.getDeliveryNotes());
-        
+
         // Process order items
         List<OrderItem> orderItems = new ArrayList<>();
+        Store orderStore = null;
         for (OrderItemDTO itemDTO : orderDTO.getItems()) {
-            Product product = productRepository.findById(itemDTO.getProductId())
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + itemDTO.getProductId()));
-            
-            // Check if sufficient stock is available using ProductService
-            if (!productService.hasSufficientStock(itemDTO.getProductId(), itemDTO.getQuantity())) {
-                throw new IllegalArgumentException("Insufficient stock for product '" + product.getName() + 
-                    "'. Available: " + product.getStockQuantity() + ", Requested: " + itemDTO.getQuantity());
+            int requestedQuantity = itemDTO.getQuantity() != null && itemDTO.getQuantity() > 0
+                    ? itemDTO.getQuantity()
+                    : 1;
+
+            Product product;
+            try {
+                product = productService.reserveProductStock(itemDTO.getProductId(), requestedQuantity);
+            } catch (EntityNotFoundException ex) {
+                throw new ResourceNotFoundException("Product not found with id: " + itemDTO.getProductId());
+            } catch (InsufficientStockException ex) {
+                throw new IllegalArgumentException("Недостаточно остатков для продукта с id " + itemDTO.getProductId());
             }
-            
-            // Reduce stock quantity using ProductService
-            productService.reduceStockQuantity(itemDTO.getProductId(), itemDTO.getQuantity());
+
+            if (orderStore == null) {
+                orderStore = product.getStore();
+                order.setStore(orderStore);
+            }
             
             OrderItem orderItem = new OrderItem();
             orderItem.setOrder(order);
             orderItem.setProduct(product);
-            orderItem.setQuantity(itemDTO.getQuantity());
+            orderItem.setQuantity(requestedQuantity);
             orderItem.setUnitPrice(product.getPrice());
             orderItem.calculateTotalPrice();
             

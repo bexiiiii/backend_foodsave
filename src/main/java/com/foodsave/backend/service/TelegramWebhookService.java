@@ -16,16 +16,21 @@ import com.foodsave.backend.domain.enums.OrderStatus;
 import com.foodsave.backend.domain.enums.PaymentMethod;
 import com.foodsave.backend.domain.enums.PaymentStatus;
 import com.foodsave.backend.repository.OrderRepository;
-import com.foodsave.backend.repository.ProductRepository;
+import com.foodsave.backend.exception.InsufficientStockException;
 import com.foodsave.backend.repository.UserRepository;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.Locale;
 import java.util.concurrent.ThreadLocalRandom;
 import java.math.BigDecimal;
@@ -38,18 +43,18 @@ public class TelegramWebhookService {
     private final TelegramBotService telegramBotService;
     private final ObjectMapper objectMapper;
     private final UserRepository userRepository;
-    private final ProductRepository productRepository;
     private final OrderRepository orderRepository;
     private final ProductService productService;
 
     @Value("${telegram.miniapp.base-url:https://miniapp.foodsave.kz}")
     private String miniAppBaseUrl;
 
-    @Value("${telegram.support.username:@FoodSave_bot}")
+    @Value("${telegram.support.username:@FoodSave_kz}")
     private String supportUsername;
 
     private static final DateTimeFormatter RESERVATION_TIME_FORMAT =
             DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm", new Locale("ru"));
+    private static final ZoneId DEFAULT_TIME_ZONE = ZoneId.of("Asia/Almaty");
 
     @Transactional
     public void handleUpdate(TelegramUpdate update) {
@@ -225,21 +230,21 @@ public class TelegramWebhookService {
 
         StringBuilder messageBuilder = new StringBuilder();
         messageBuilder.append("🧾 Заказ №").append(order.getOrderNumber()).append("\n");
-        messageBuilder.append("Коробка: ").append(orUnknown(product.getName())).append("\n");
-        messageBuilder.append("Магазин: ").append(orUnknown(store.getName())).append("\n");
+        messageBuilder.append("Бокс: ").append(orUnknown(product.getName())).append("\n");
+        messageBuilder.append("Заведение: ").append(orUnknown(store.getName())).append("\n");
         if (store.getAddress() != null && !store.getAddress().isBlank()) {
             messageBuilder.append("Адрес: ").append(store.getAddress()).append("\n");
         }
         messageBuilder.append("Количество: ").append(order.getItems().get(0).getQuantity()).append(" шт.").append("\n");
         messageBuilder.append("Цена за шт.: ").append(formattedUnit).append("\n");
         messageBuilder.append("Сумма: ").append(formattedTotal).append("\n");
-        messageBuilder.append("Статус: ожидает подтверждения");
+      
 
         if (formattedTime != null) {
             messageBuilder.append("\nВремя бронирования: ").append(formattedTime);
         }
 
-        messageBuilder.append("\n\nЗаказ закреплён за ").append(reserverName).append(". Мы сообщим заведению и пришлём уведомление, когда коробка будет готова к выдаче. Если появятся вопросы — используйте команду /help.");
+        messageBuilder.append("\n\nЗаказ закреплён за ").append(reserverName).append(".  Если появятся вопросы — используйте команду /help.");
 
         telegramBotService.sendMessage(chatId, new TelegramBotService.TelegramMessagePayload(
                 messageBuilder.toString(),
@@ -262,11 +267,21 @@ public class TelegramWebhookService {
             return null;
         }
         try {
-            LocalDateTime parsed = LocalDateTime.parse(timestamp);
-            return RESERVATION_TIME_FORMAT.format(parsed);
-        } catch (Exception ex) {
-            log.debug("Unable to parse reservation timestamp: {}", timestamp, ex);
-            return null;
+            Instant instant = Instant.parse(timestamp);
+            return RESERVATION_TIME_FORMAT.format(instant.atZone(DEFAULT_TIME_ZONE));
+        } catch (DateTimeParseException ignored) {
+            try {
+                OffsetDateTime offsetDateTime = OffsetDateTime.parse(timestamp);
+                return RESERVATION_TIME_FORMAT.format(offsetDateTime.atZoneSameInstant(DEFAULT_TIME_ZONE));
+            } catch (DateTimeParseException ignoredOffset) {
+                try {
+                    LocalDateTime localDateTime = LocalDateTime.parse(timestamp);
+                    return RESERVATION_TIME_FORMAT.format(localDateTime.atZone(DEFAULT_TIME_ZONE));
+                } catch (DateTimeParseException ex) {
+                    log.debug("Unable to parse reservation timestamp: {}", timestamp, ex);
+                    return null;
+                }
+            }
         }
     }
 
@@ -314,18 +329,7 @@ public class TelegramWebhookService {
             return new ReservationResult(false, null, null, "Не удалось определить продукт для бронирования. Пожалуйста, обновите мини‑приложение и попробуйте снова.");
         }
 
-        Product product = productRepository.findById(payload.productId())
-                .orElse(null);
-
-        if (product == null) {
-            return new ReservationResult(false, null, null, "Выбранный продукт больше не доступен. Попробуйте выбрать другую коробку.");
-        }
-
-        if (!productService.hasSufficientStock(product.getId(), Math.max(payload.quantity(), 1))) {
-            log.warn("Insufficient stock for product {} (requested {}, available {})",
-                    product.getId(), Math.max(payload.quantity(), 1), product.getStockQuantity());
-            return new ReservationResult(false, null, product, "Упс! Коробка уже закончилась. Выберите, пожалуйста, другую позицию.");
-        }
+        int requestedQuantity = Math.max(payload.quantity(), 1);
 
         User user = null;
         if (from != null && from.id() != null) {
@@ -335,7 +339,22 @@ public class TelegramWebhookService {
         if (user == null) {
             log.warn("Reservation attempted without linked user. telegramId={} payload={}" ,
                     from != null ? from.id() : null, payload);
-            return new ReservationResult(false, null, product, "Не удалось найти ваш профиль. Откройте мини‑приложение FoodSave ещё раз через кнопку бота и повторите попытку.");
+            return new ReservationResult(false, null, null, "Не удалось найти ваш профиль. Откройте мини‑приложение FoodSave ещё раз через кнопку бота и повторите попытку.");
+        }
+
+        Product product;
+        try {
+            product = productService.reserveProductStock(payload.productId(), requestedQuantity);
+        } catch (EntityNotFoundException ex) {
+            log.warn("Reservation failed: product {} not found", payload.productId());
+            return new ReservationResult(false, null, null, "Выбранный продукт больше не доступен. Попробуйте выбрать другую коробку.");
+        } catch (InsufficientStockException ex) {
+            log.warn("Reservation failed: insufficient stock for product {} (requested={} telegramId={})",
+                    payload.productId(), requestedQuantity, from != null ? from.id() : null);
+            return new ReservationResult(false, null, null, "Упс! Коробка уже закончилась. Выберите, пожалуйста, другую позицию.");
+        } catch (IllegalArgumentException ex) {
+            log.warn("Reservation failed: invalid quantity {} for product {}", requestedQuantity, payload.productId(), ex);
+            return new ReservationResult(false, null, null, "Количество для бронирования указано неверно. Попробуйте ещё раз.");
         }
 
         Order order = new Order();
@@ -352,7 +371,7 @@ public class TelegramWebhookService {
         OrderItem item = new OrderItem();
         item.setOrder(order);
         item.setProduct(product);
-        item.setQuantity(Math.max(payload.quantity(), 1));
+        item.setQuantity(requestedQuantity);
 
         BigDecimal unitPrice = payload.unitPrice() > 0
                 ? BigDecimal.valueOf(payload.unitPrice())
@@ -363,13 +382,6 @@ public class TelegramWebhookService {
 
         order.addItem(item);
         order.calculateTotals();
-
-        try {
-            productService.reduceStockQuantity(product.getId(), item.getQuantity());
-        } catch (Exception ex) {
-            log.error("Failed to reserve stock for product {}", product.getId(), ex);
-            return new ReservationResult(false, null, product, "Не удалось забронировать коробку: остатков недостаточно. Попробуйте выбрать другой товар.");
-        }
 
         Order savedOrder = orderRepository.save(order);
 
