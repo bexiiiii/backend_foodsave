@@ -112,8 +112,6 @@ public class ProductService {
         return convertToDTO(product);
     }
 
-    @Cacheable(cacheNames = STORE_PRODUCTS_CACHE,
-            key = "#storeId + ':' + #pageable.pageNumber + ':' + #pageable.pageSize + ':' + #pageable.sort.toString()")
     public Page<ProductDTO> getProductsByStore(Long storeId, Pageable pageable) {
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new EntityNotFoundException("Store not found"));
@@ -128,8 +126,6 @@ public class ProductService {
                 .collect(Collectors.toList());
     }
 
-    @Cacheable(cacheNames = FEATURED_PRODUCTS_CACHE,
-            key = "#pageable.pageNumber + ':' + #pageable.pageSize + ':' + #pageable.sort.toString()")
     public Page<ProductDTO> getFeaturedProducts(Pageable pageable) {
         return productRepository.findByDiscountPercentageGreaterThan(0.0, pageable)
                 .map(this::convertToDTO);
@@ -194,8 +190,6 @@ public class ProductService {
                 .map(this::convertToDTO);
     }
 
-    @Cacheable(cacheNames = DISCOUNTED_PRODUCTS_CACHE,
-            key = "#pageable.pageNumber + ':' + #pageable.pageSize + ':' + #pageable.sort.toString()")
     public Page<ProductDTO> getDiscountedProducts(Pageable pageable) {
         return productRepository.findByDiscountPercentageGreaterThan(0.0, pageable)
                 .map(this::convertToDTO);
