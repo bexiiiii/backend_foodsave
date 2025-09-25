@@ -32,7 +32,7 @@ public class FileUploadController {
     @Value("${app.upload.dir:uploads}")
     private String uploadDir;
 
-    @Value("${app.upload.max-file-size:15728640}") // 15MB
+    @Value("${app.upload.max-file-size:10485760}") // 10MB
     private long maxFileSize;
 
     @Value("${app.base-url:http://localhost:8080}")
