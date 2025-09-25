@@ -14,8 +14,10 @@ public class StaticResourceConfig implements WebMvcConfigurer {
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         // Serve uploaded files
-        registry.addResourceHandler("/uploads/**")
-                .addResourceLocations("file:" + uploadDir + "/")
+        String resourceLocation = "file:" + uploadDir + "/";
+
+        registry.addResourceHandler("/uploads/**", "/api/uploads/**")
+                .addResourceLocations(resourceLocation)
                 .setCachePeriod(3600); // Cache for 1 hour
     }
 }
