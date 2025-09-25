@@ -46,6 +46,17 @@ public class FileUploadController {
     @PreAuthorize("hasRole('STORE_OWNER') or hasRole('STORE_MANAGER') or hasRole('SUPER_ADMIN')")
     @Operation(summary = "Upload product image")
     public ResponseEntity<?> uploadImage(@RequestParam("file") MultipartFile file) {
+        return handleFileUpload(file, "products");
+    }
+
+    @PostMapping("/store-logo")
+    @PreAuthorize("hasRole('STORE_OWNER') or hasRole('STORE_MANAGER') or hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Upload store logo")
+    public ResponseEntity<?> uploadStoreLogo(@RequestParam("file") MultipartFile file) {
+        return handleFileUpload(file, "stores");
+    }
+
+    private ResponseEntity<?> handleFileUpload(MultipartFile file, String targetDirectory) {
         try {
             // Validate file
             if (file.isEmpty()) {
@@ -67,7 +78,7 @@ public class FileUploadController {
             }
 
             // Create upload directory if it doesn't exist
-            Path uploadPath = Paths.get(uploadDir, "products");
+            Path uploadPath = Paths.get(uploadDir, targetDirectory);
             if (!Files.exists(uploadPath)) {
                 Files.createDirectories(uploadPath);
             }
@@ -84,7 +95,7 @@ public class FileUploadController {
             Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
             // Generate file URL
-            String fileUrl = baseUrl + "/uploads/products/" + fileName;
+            String fileUrl = baseUrl + "/uploads/" + targetDirectory + "/" + fileName;
 
             log.info("File uploaded successfully: {}", fileName);
 
