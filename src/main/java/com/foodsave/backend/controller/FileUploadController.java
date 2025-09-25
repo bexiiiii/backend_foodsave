@@ -2,16 +2,18 @@ package com.foodsave.backend.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -35,7 +37,7 @@ public class FileUploadController {
     @Value("${app.upload.max-file-size:10485760}") // 10MB
     private long maxFileSize;
 
-    @Value("${app.base-url:http://localhost:8080}")
+    @Value("${app.base-url:}")
     private String baseUrl;
 
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of(
@@ -45,18 +47,20 @@ public class FileUploadController {
     @PostMapping("/image")
     @PreAuthorize("hasRole('STORE_OWNER') or hasRole('STORE_MANAGER') or hasRole('SUPER_ADMIN')")
     @Operation(summary = "Upload product image")
-    public ResponseEntity<?> uploadImage(@RequestParam("file") MultipartFile file) {
-        return handleFileUpload(file, "products");
+    public ResponseEntity<?> uploadImage(@RequestParam("file") MultipartFile file,
+                                         HttpServletRequest request) {
+        return handleFileUpload(file, "products", request);
     }
 
     @PostMapping("/store-logo")
     @PreAuthorize("hasRole('STORE_OWNER') or hasRole('STORE_MANAGER') or hasRole('SUPER_ADMIN')")
     @Operation(summary = "Upload store logo")
-    public ResponseEntity<?> uploadStoreLogo(@RequestParam("file") MultipartFile file) {
-        return handleFileUpload(file, "stores");
+    public ResponseEntity<?> uploadStoreLogo(@RequestParam("file") MultipartFile file,
+                                             HttpServletRequest request) {
+        return handleFileUpload(file, "stores", request);
     }
 
-    private ResponseEntity<?> handleFileUpload(MultipartFile file, String targetDirectory) {
+    private ResponseEntity<?> handleFileUpload(MultipartFile file, String targetDirectory, HttpServletRequest request) {
         try {
             // Validate file
             if (file.isEmpty()) {
@@ -95,7 +99,7 @@ public class FileUploadController {
             Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
             // Generate file URL
-            String fileUrl = baseUrl + "/uploads/" + targetDirectory + "/" + fileName;
+            String fileUrl = resolveBaseUrl(request) + "/uploads/" + targetDirectory + "/" + fileName;
 
             log.info("File uploaded successfully: {}", fileName);
 
@@ -117,13 +121,14 @@ public class FileUploadController {
     @PostMapping("/images")
     @PreAuthorize("hasRole('STORE_OWNER') or hasRole('STORE_MANAGER') or hasRole('SUPER_ADMIN')")
     @Operation(summary = "Upload multiple product images")
-    public ResponseEntity<?> uploadImages(@RequestParam("files") MultipartFile[] files) {
+    public ResponseEntity<?> uploadImages(@RequestParam("files") MultipartFile[] files,
+                                          HttpServletRequest request) {
         List<Map<String, Object>> uploadedFiles = new ArrayList<>();
         List<String> errors = new ArrayList<>();
 
         for (MultipartFile file : files) {
             try {
-                ResponseEntity<?> result = uploadImage(file);
+                ResponseEntity<?> result = uploadImage(file, request);
                 if (result.getStatusCode() == HttpStatus.OK) {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> responseBody = (Map<String, Object>) result.getBody();
@@ -178,5 +183,20 @@ public class FileUploadController {
         }
         int lastDotIndex = filename.lastIndexOf('.');
         return lastDotIndex > 0 ? filename.substring(lastDotIndex) : "";
+    }
+
+    private String resolveBaseUrl(HttpServletRequest request) {
+        if (StringUtils.hasText(baseUrl)) {
+            return baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        }
+
+        String contextPath = request.getContextPath();
+        String resolved = ServletUriComponentsBuilder.fromRequestUri(request)
+                .replacePath(contextPath != null ? contextPath : "")
+                .replaceQuery(null)
+                .build()
+                .toUriString();
+
+        return resolved.endsWith("/") ? resolved.substring(0, resolved.length() - 1) : resolved;
     }
 }
