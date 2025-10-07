@@ -176,7 +176,7 @@ public class TelegramWebhookService {
 
         // Fallback for any other text input
         telegramBotService.sendMessage(chatId, new TelegramBotService.TelegramMessagePayload(
-                "Чтобы выбрать коробку со скидкой, откройте мини‑приложение FoodSave и нажмите «Забронировать» на нужном товаре.",
+                "Чтобы выбрать бокс со скидкой, откройте мини‑приложение FoodSave и нажмите «Забронировать» на нужном товаре.",
                 null,
                 null,
                 null
@@ -196,7 +196,7 @@ public class TelegramWebhookService {
     private void sendSupportMessage(Long chatId) {
         String supportText = String.join("\n",
                 "Нужна помощь? Мы всегда на связи!",
-                "Напишите в поддержку: " + supportUsername,
+                "Напишите в поддержку: @FoodSave_kz ",
                 "Или откройте мини‑приложение, чтобы оформить заказ заново.");
 
         telegramBotService.sendMessage(chatId, new TelegramBotService.TelegramMessagePayload(
