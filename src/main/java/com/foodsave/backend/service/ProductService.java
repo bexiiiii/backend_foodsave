@@ -31,12 +31,6 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ProductService {
 
-    private static final String PRODUCT_BY_ID_CACHE = "productByIdCache";
-    private static final String STORE_PRODUCTS_CACHE = "storeProductsCache";
-    private static final String FEATURED_PRODUCTS_CACHE = "featuredProductsCache";
-    private static final String DISCOUNTED_PRODUCTS_CACHE = "discountedProductsCache";
-    private static final String PRODUCT_CATEGORIES_CACHE = "productCategoriesCache";
-
     private final ProductRepository productRepository;
     private final StoreRepository storeRepository;
     private final CategoryRepository categoryRepository;
@@ -105,12 +99,14 @@ public class ProductService {
         return null;
     }
 
+    @Cacheable(value = "products", key = "#id")
     public ProductDTO getProductById(Long id) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found"));
         return convertToDTO(product);
     }
 
+    @Cacheable(value = "productsByStore", key = "#storeId + '_' + #pageable.pageNumber + '_' + #pageable.pageSize")
     public Page<ProductDTO> getProductsByStore(Long storeId, Pageable pageable) {
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new EntityNotFoundException("Store not found"));
@@ -118,24 +114,25 @@ public class ProductService {
                 .map(this::convertToDTO);
     }
 
-    @Cacheable(cacheNames = PRODUCT_CATEGORIES_CACHE, key = "'ALL'")
+    @Cacheable(value = "categories", key = "'ALL'")
     public List<String> getAllCategories() {
         return categoryRepository.findAll().stream()
                 .map(Category::getName)
                 .collect(Collectors.toList());
     }
 
+    @Cacheable(value = "featuredProducts", key = "#pageable.pageNumber + '_' + #pageable.pageSize")
     public Page<ProductDTO> getFeaturedProducts(Pageable pageable) {
         return productRepository.findByDiscountPercentageGreaterThan(0.0, pageable)
                 .map(this::convertToDTO);
     }
 
     @Caching(evict = {
-            @CacheEvict(cacheNames = PRODUCT_BY_ID_CACHE, allEntries = true),
-            @CacheEvict(cacheNames = STORE_PRODUCTS_CACHE, allEntries = true),
-            @CacheEvict(cacheNames = FEATURED_PRODUCTS_CACHE, allEntries = true),
-            @CacheEvict(cacheNames = DISCOUNTED_PRODUCTS_CACHE, allEntries = true),
-            @CacheEvict(cacheNames = PRODUCT_CATEGORIES_CACHE, allEntries = true)
+            @CacheEvict(value = "products", allEntries = true),
+            @CacheEvict(value = "productsByStore", allEntries = true),
+            @CacheEvict(value = "featuredProducts", allEntries = true),
+            @CacheEvict(value = "discountedProducts", allEntries = true),
+            @CacheEvict(value = "categories", allEntries = true)
     })
     public ProductDTO createProduct(ProductDTO productDTO) {
         Store store = storeRepository.findById(productDTO.getStoreId())
@@ -151,10 +148,10 @@ public class ProductService {
     }
 
     @Caching(evict = {
-            @CacheEvict(cacheNames = PRODUCT_BY_ID_CACHE, key = "#id"),
-            @CacheEvict(cacheNames = STORE_PRODUCTS_CACHE, allEntries = true),
-            @CacheEvict(cacheNames = FEATURED_PRODUCTS_CACHE, allEntries = true),
-            @CacheEvict(cacheNames = DISCOUNTED_PRODUCTS_CACHE, allEntries = true)
+            @CacheEvict(value = "products", key = "#id"),
+            @CacheEvict(value = "productsByStore", allEntries = true),
+            @CacheEvict(value = "featuredProducts", allEntries = true),
+            @CacheEvict(value = "discountedProducts", allEntries = true)
     })
     public ProductDTO updateProduct(Long id, ProductDTO productDTO) {
         Product product = productRepository.findById(id)
@@ -168,20 +165,22 @@ public class ProductService {
     }
 
     @Caching(evict = {
-            @CacheEvict(cacheNames = PRODUCT_BY_ID_CACHE, key = "#id"),
-            @CacheEvict(cacheNames = STORE_PRODUCTS_CACHE, allEntries = true),
-            @CacheEvict(cacheNames = FEATURED_PRODUCTS_CACHE, allEntries = true),
-            @CacheEvict(cacheNames = DISCOUNTED_PRODUCTS_CACHE, allEntries = true)
+            @CacheEvict(value = "products", key = "#id"),
+            @CacheEvict(value = "productsByStore", allEntries = true),
+            @CacheEvict(value = "featuredProducts", allEntries = true),
+            @CacheEvict(value = "discountedProducts", allEntries = true)
     })
     public void deleteProduct(Long id) {
         productRepository.deleteById(id);
     }
 
+    @Cacheable(value = "searchResults", key = "#query + '_' + #pageable.pageNumber + '_' + #pageable.pageSize")
     public Page<ProductDTO> searchProducts(String query, Pageable pageable) {
         return productRepository.searchProducts(query, pageable)
                 .map(this::convertToDTO);
     }
 
+    @Cacheable(value = "productsByCategory", key = "#categoryId + '_' + #pageable.pageNumber + '_' + #pageable.pageSize")
     public Page<ProductDTO> getProductsByCategory(Long categoryId, Pageable pageable) {
         Category category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new EntityNotFoundException("Category not found"));
@@ -189,11 +188,13 @@ public class ProductService {
                 .map(this::convertToDTO);
     }
 
+    @Cacheable(value = "discountedProducts", key = "#pageable.pageNumber + '_' + #pageable.pageSize")
     public Page<ProductDTO> getDiscountedProducts(Pageable pageable) {
         return productRepository.findByDiscountPercentageGreaterThan(0.0, pageable)
                 .map(this::convertToDTO);
     }
 
+    @Cacheable(value = "lowStockProducts", key = "#threshold + '_' + #pageable.pageNumber + '_' + #pageable.pageSize")
     public Page<ProductDTO> getLowStockProducts(Integer threshold, Pageable pageable) {
         return productRepository.findByStockQuantityLessThanEqual(threshold, pageable)
                 .map(this::convertToDTO);
@@ -205,10 +206,10 @@ public class ProductService {
     }
 
     @Caching(evict = {
-            @CacheEvict(cacheNames = PRODUCT_BY_ID_CACHE, key = "#id"),
-            @CacheEvict(cacheNames = STORE_PRODUCTS_CACHE, allEntries = true),
-            @CacheEvict(cacheNames = FEATURED_PRODUCTS_CACHE, allEntries = true),
-            @CacheEvict(cacheNames = DISCOUNTED_PRODUCTS_CACHE, allEntries = true)
+            @CacheEvict(value = "products", key = "#id"),
+            @CacheEvict(value = "productsByStore", allEntries = true),
+            @CacheEvict(value = "featuredProducts", allEntries = true),
+            @CacheEvict(value = "discountedProducts", allEntries = true)
     })
     public ProductDTO updateProductStatus(Long id, ProductStatus status) {
         Product product = productRepository.findById(id)
@@ -221,10 +222,10 @@ public class ProductService {
      * Update stock quantity for a product
      */
     @Caching(evict = {
-            @CacheEvict(cacheNames = PRODUCT_BY_ID_CACHE, key = "#productId"),
-            @CacheEvict(cacheNames = STORE_PRODUCTS_CACHE, allEntries = true),
-            @CacheEvict(cacheNames = FEATURED_PRODUCTS_CACHE, allEntries = true),
-            @CacheEvict(cacheNames = DISCOUNTED_PRODUCTS_CACHE, allEntries = true)
+            @CacheEvict(value = "products", key = "#productId"),
+            @CacheEvict(value = "productsByStore", allEntries = true),
+            @CacheEvict(value = "featuredProducts", allEntries = true),
+            @CacheEvict(value = "discountedProducts", allEntries = true)
     })
     public ProductDTO updateStockQuantity(Long productId, Integer newQuantity) {
         Product product = productRepository.findById(productId)
@@ -243,10 +244,10 @@ public class ProductService {
      */
     @Deprecated
     @Caching(evict = {
-            @CacheEvict(cacheNames = PRODUCT_BY_ID_CACHE, key = "#productId"),
-            @CacheEvict(cacheNames = STORE_PRODUCTS_CACHE, allEntries = true),
-            @CacheEvict(cacheNames = FEATURED_PRODUCTS_CACHE, allEntries = true),
-            @CacheEvict(cacheNames = DISCOUNTED_PRODUCTS_CACHE, allEntries = true)
+            @CacheEvict(value = "products", key = "#productId"),
+            @CacheEvict(value = "productsByStore", allEntries = true),
+            @CacheEvict(value = "featuredProducts", allEntries = true),
+            @CacheEvict(value = "discountedProducts", allEntries = true)
     })
     public ProductDTO reduceStockQuantity(Long productId, Integer quantity) {
         int normalizedQuantity = (quantity != null && quantity > 0) ? quantity : 1;
@@ -255,10 +256,10 @@ public class ProductService {
     }
 
     @Caching(evict = {
-            @CacheEvict(cacheNames = PRODUCT_BY_ID_CACHE, key = "#productId"),
-            @CacheEvict(cacheNames = STORE_PRODUCTS_CACHE, allEntries = true),
-            @CacheEvict(cacheNames = FEATURED_PRODUCTS_CACHE, allEntries = true),
-            @CacheEvict(cacheNames = DISCOUNTED_PRODUCTS_CACHE, allEntries = true)
+            @CacheEvict(value = "products", key = "#productId"),
+            @CacheEvict(value = "productsByStore", allEntries = true),
+            @CacheEvict(value = "featuredProducts", allEntries = true),
+            @CacheEvict(value = "discountedProducts", allEntries = true)
     })
     public Product reserveProductStock(Long productId, int quantity) {
         return decreaseStockWithLock(productId, quantity);

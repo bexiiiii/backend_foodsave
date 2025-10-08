@@ -132,6 +132,10 @@ public class Product extends BaseEntity {
         images.remove(imageUrl);
     }
 
+    public String getFirstImage() {
+        return images != null && !images.isEmpty() ? images.get(0) : null;
+    }
+
     public double getDiscountedPrice() {
         if (discountPercentage != null && discountPercentage > 0) {
             return price.doubleValue() * (1 - discountPercentage / 100.0);

@@ -10,6 +10,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
@@ -22,6 +23,28 @@ import java.util.Set;
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
     
+    // Оптимизированные запросы с EntityGraph для быстрой загрузки
+    @EntityGraph(attributePaths = {"store", "category"})
+    @Query("SELECT p FROM Product p WHERE p.store.id = :storeId AND p.active = true")
+    Page<Product> findLightByStoreId(@Param("storeId") Long storeId, Pageable pageable);
+    
+    @EntityGraph(attributePaths = {"store", "category"})  
+    @Query("SELECT p FROM Product p WHERE p.discountPercentage > 0 AND p.active = true")
+    Page<Product> findLightDiscountedProducts(Pageable pageable);
+
+    // Оптимизированные запросы с EntityGraph
+    @EntityGraph(attributePaths = {"store", "category"})
+    @Query("SELECT p FROM Product p WHERE p.store.id = :storeId AND p.active = true")
+    Page<Product> findActiveByStoreIdOptimized(@Param("storeId") Long storeId, Pageable pageable);
+    
+    @EntityGraph(attributePaths = {"store", "category"})
+    @Query("SELECT p FROM Product p WHERE p.discountPercentage > 0 AND p.active = true")
+    Page<Product> findDiscountedProductsOptimized(Pageable pageable);
+    
+    @EntityGraph(attributePaths = {"store", "category"})
+    @Query("SELECT p FROM Product p WHERE p.category.id = :categoryId AND p.active = true")
+    Page<Product> findByCategoryIdOptimized(@Param("categoryId") Long categoryId, Pageable pageable);
+
     Page<Product> findByStore(Store store, Pageable pageable);
     
     List<Product> findByStoreId(Long storeId);

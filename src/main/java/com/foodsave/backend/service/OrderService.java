@@ -20,6 +20,9 @@ import com.foodsave.backend.security.SecurityUtils;
 import com.foodsave.backend.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -126,6 +129,16 @@ public class OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + id));
     }
 
+    // Вспомогательные методы для кэширования
+    public Long getCurrentUserId() {
+        return securityUtils.getCurrentUser().getId();
+    }
+    
+    public Long getCurrentStoreId() {
+        return securityUtils.getCurrentStore().getId();
+    }
+
+    @Cacheable(value = "userOrders", key = "#root.target.getCurrentUserId()")
     public List<OrderDTO> getCurrentUserOrders() {
         User currentUser = securityUtils.getCurrentUser();
         return orderRepository.findByUser(currentUser).stream()
@@ -133,6 +146,7 @@ public class OrderService {
                 .collect(Collectors.toList());
     }
 
+    @Cacheable(value = "storeOrders", key = "#root.target.getCurrentStoreId()")
     public List<OrderDTO> getCurrentStoreOrders() {
         Store currentStore = securityUtils.getCurrentStore();
         return orderRepository.findByStore(currentStore).stream()
@@ -379,10 +393,6 @@ public class OrderService {
         
         long readyOrders = orders.stream()
                 .mapToLong(order -> order.getStatus() == OrderStatus.READY_FOR_PICKUP ? 1 : 0)
-                .sum();
-        
-        long outForDeliveryOrders = orders.stream()
-                .mapToLong(order -> order.getStatus() == OrderStatus.OUT_FOR_DELIVERY ? 1 : 0)
                 .sum();
         
         long deliveredOrders = orders.stream()
