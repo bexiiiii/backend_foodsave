@@ -106,7 +106,7 @@ public class ProductService {
         return convertToDTO(product);
     }
 
-    @Cacheable(value = "productsByStore", key = "#storeId + '_' + #pageable.pageNumber + '_' + #pageable.pageSize")
+    // Note: Page objects don't cache well with Redis due to serialization issues
     public Page<ProductDTO> getProductsByStore(Long storeId, Pageable pageable) {
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new EntityNotFoundException("Store not found"));
@@ -121,7 +121,7 @@ public class ProductService {
                 .collect(Collectors.toList());
     }
 
-    @Cacheable(value = "featuredProducts", key = "#pageable.pageNumber + '_' + #pageable.pageSize")
+    // Note: Page objects don't cache well with Redis due to serialization issues
     public Page<ProductDTO> getFeaturedProducts(Pageable pageable) {
         return productRepository.findByDiscountPercentageGreaterThan(0.0, pageable)
                 .map(this::convertToDTO);
@@ -174,13 +174,13 @@ public class ProductService {
         productRepository.deleteById(id);
     }
 
-    @Cacheable(value = "searchResults", key = "#query + '_' + #pageable.pageNumber + '_' + #pageable.pageSize")
+    // Note: Page objects don't cache well with Redis due to serialization issues
     public Page<ProductDTO> searchProducts(String query, Pageable pageable) {
         return productRepository.searchProducts(query, pageable)
                 .map(this::convertToDTO);
     }
 
-    @Cacheable(value = "productsByCategory", key = "#categoryId + '_' + #pageable.pageNumber + '_' + #pageable.pageSize")
+    // Note: Page objects don't cache well with Redis due to serialization issues
     public Page<ProductDTO> getProductsByCategory(Long categoryId, Pageable pageable) {
         Category category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new EntityNotFoundException("Category not found"));
@@ -188,13 +188,13 @@ public class ProductService {
                 .map(this::convertToDTO);
     }
 
-    @Cacheable(value = "discountedProducts", key = "#pageable.pageNumber + '_' + #pageable.pageSize")
+    // Note: Page objects don't cache well with Redis due to serialization issues
     public Page<ProductDTO> getDiscountedProducts(Pageable pageable) {
         return productRepository.findByDiscountPercentageGreaterThan(0.0, pageable)
                 .map(this::convertToDTO);
     }
 
-    @Cacheable(value = "lowStockProducts", key = "#threshold + '_' + #pageable.pageNumber + '_' + #pageable.pageSize")
+    // Note: Page objects don't cache well with Redis due to serialization issues
     public Page<ProductDTO> getLowStockProducts(Integer threshold, Pageable pageable) {
         return productRepository.findByStockQuantityLessThanEqual(threshold, pageable)
                 .map(this::convertToDTO);

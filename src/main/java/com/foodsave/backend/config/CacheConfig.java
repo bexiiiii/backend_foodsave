@@ -53,18 +53,12 @@ public class CacheConfig {
         // Среднесрочное кэширование (30 минут) - для динамических данных
         RedisCacheConfiguration mediumTermConfig = redisCacheConfiguration.entryTtl(Duration.ofMinutes(30));
         cacheConfigurations.put("products", mediumTermConfig);
-        cacheConfigurations.put("featuredProducts", mediumTermConfig);
-        cacheConfigurations.put("productsByStore", mediumTermConfig);
-        cacheConfigurations.put("productsByCategory", mediumTermConfig);
-        cacheConfigurations.put("discountedProducts", mediumTermConfig);
         cacheConfigurations.put("productCategoriesCache", mediumTermConfig);
         
         // Краткосрочное кэширование (5 минут) - для часто изменяющихся данных
         RedisCacheConfiguration shortTermConfig = redisCacheConfiguration.entryTtl(Duration.ofMinutes(5));
-        cacheConfigurations.put("searchResults", shortTermConfig);
         cacheConfigurations.put("userOrders", shortTermConfig);
         cacheConfigurations.put("orderStats", shortTermConfig);
-        cacheConfigurations.put("lowStockProducts", shortTermConfig);
 
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(redisCacheConfiguration)
