@@ -239,13 +239,14 @@ public class TelegramStoreManagerBotService {
             );
             authentication.getPrincipal(); // Trigger validation
         } catch (BadCredentialsException ex) {
+            session.setState(TelegramSessionState.AWAITING_PASSWORD);
+            telegramSessionService.save(session);
             telegramBotService.sendMessage(chatId, new TelegramBotService.TelegramMessagePayload(
-                    "Неверный e-mail или пароль. Попробуйте снова, отправив /login.",
+                    "Неверный e-mail или пароль. Попробуйте ещё раз ввести пароль. Чтобы начать заново, отправьте /login.",
                     null,
                     null,
                     null
             ));
-            telegramSessionService.resetSession(chatId);
             return;
         } catch (AuthenticationException ex) {
             log.error("Telegram login failed for email {}", email, ex);
