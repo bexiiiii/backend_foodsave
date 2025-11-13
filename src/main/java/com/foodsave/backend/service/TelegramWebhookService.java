@@ -57,7 +57,11 @@ public class TelegramWebhookService {
             DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm", new Locale("ru"));
     private static final ZoneId DEFAULT_TIME_ZONE = ZoneId.of("Asia/Almaty");
 
-    @Transactional
+    @Transactional(noRollbackFor = {
+            org.springframework.security.core.AuthenticationException.class,
+            org.springframework.security.authentication.BadCredentialsException.class,
+            IllegalArgumentException.class
+    })
     public void handleUpdate(TelegramUpdate update) {
         if (update == null) {
             return;
