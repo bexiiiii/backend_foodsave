@@ -138,6 +138,40 @@ public class TelegramBotService {
         }
     }
 
+    public void sendMessageWithKeyboard(Long chatId,
+                                        String text,
+                                        List<List<Map<String, Object>>> inlineKeyboard) {
+        if (botToken == null || botToken.isBlank()) {
+            log.warn("Telegram bot token is not configured");
+            return;
+        }
+        if (chatId == null) {
+            log.warn("Cannot send Telegram message without chat id");
+            return;
+        }
+        if (text == null || text.isBlank()) {
+            log.warn("Telegram message text is empty");
+            return;
+        }
+
+        String url = "https://api.telegram.org/bot" + botToken + "/sendMessage";
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("chat_id", chatId);
+        payload.put("text", text);
+        payload.put("parse_mode", "HTML");
+
+        if (inlineKeyboard != null && !inlineKeyboard.isEmpty()) {
+            payload.put("reply_markup", Map.of("inline_keyboard", inlineKeyboard));
+        }
+
+        try {
+            ResponseEntity<String> response = getRestTemplate().postForEntity(url, payload, String.class);
+            log.debug("Telegram sendMessageWithKeyboard status: {}", response.getStatusCodeValue());
+        } catch (Exception e) {
+            log.error("Failed to send Telegram message with keyboard", e);
+        }
+    }
+
     public String resolveButtonUrl(String rawUrl) {
         if (rawUrl == null || rawUrl.isBlank()) {
             return null;

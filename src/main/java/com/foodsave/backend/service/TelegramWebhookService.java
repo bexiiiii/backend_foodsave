@@ -45,6 +45,7 @@ public class TelegramWebhookService {
     private final UserRepository userRepository;
     private final OrderRepository orderRepository;
     private final ProductService productService;
+    private final TelegramStoreManagerBotService telegramStoreManagerBotService;
 
     @Value("${telegram.miniapp.base-url:https://miniapp.foodsave.kz}")
     private String miniAppBaseUrl;
@@ -78,6 +79,10 @@ public class TelegramWebhookService {
         }
 
         if (handleWebAppData(update, message, from, chatId)) {
+            return;
+        }
+
+        if (telegramStoreManagerBotService.handleUpdate(update, message, from, chatId)) {
             return;
         }
 

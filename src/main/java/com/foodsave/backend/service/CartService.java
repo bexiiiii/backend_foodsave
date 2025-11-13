@@ -137,7 +137,12 @@ public class CartService {
                 .orElseThrow(() -> new ResourceNotFoundException("Cart not found"));
         
         return cart.getItems().stream()
-                .map(item -> item.getProduct().getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
+                .map(item -> {
+                    BigDecimal unitPrice = item.getProduct().getPrice() != null
+                            ? item.getProduct().getPrice()
+                            : BigDecimal.ZERO;
+                    return unitPrice.multiply(BigDecimal.valueOf(item.getQuantity()));
+                })
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
     

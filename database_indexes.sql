@@ -1,3 +1,4 @@
+-- Active: 1758137023589@@188.225.31.57@5432@foodsave_cloud
 -- FoodSave Database Optimization Indexes
 -- Выполнить этот скрипт для добавления критичных индексов
 

@@ -217,7 +217,7 @@ public class OrderService {
             orderItem.setOrder(order);
             orderItem.setProduct(product);
             orderItem.setQuantity(requestedQuantity);
-            orderItem.setUnitPrice(product.getPrice());
+            orderItem.setUnitPrice(product.getPrice() != null ? product.getPrice() : BigDecimal.ZERO);
             orderItem.calculateTotalPrice();
             
             orderItems.add(orderItem);
@@ -271,7 +271,7 @@ public class OrderService {
                 orderItem.setOrder(order);
                 orderItem.setProduct(product);
                 orderItem.setQuantity(itemDTO.getQuantity());
-                orderItem.setUnitPrice(product.getPrice());
+                orderItem.setUnitPrice(product.getPrice() != null ? product.getPrice() : BigDecimal.ZERO);
                 orderItem.calculateTotalPrice();
                 
                 order.getItems().add(orderItem);

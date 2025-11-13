@@ -21,6 +21,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -239,6 +242,33 @@ public class ProductService {
         return convertToDTO(productRepository.save(product));
     }
 
+    @Caching(evict = {
+            @CacheEvict(value = "products", key = "#productId"),
+            @CacheEvict(value = "productsByStore", allEntries = true),
+            @CacheEvict(value = "featuredProducts", allEntries = true),
+            @CacheEvict(value = "discountedProducts", allEntries = true)
+    })
+    public ProductDTO updateProductPrices(Long productId,
+                                          BigDecimal originalPrice,
+                                          BigDecimal discountedPrice) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new EntityNotFoundException("Product not found"));
+
+        if (discountedPrice == null || discountedPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Цена со скидкой должна быть больше нуля");
+        }
+
+        if (originalPrice != null && originalPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Цена без скидки должна быть больше нуля");
+        }
+
+        product.setPrice(discountedPrice);
+        product.setOriginalPrice(originalPrice);
+        product.setDiscountPercentage(calculateDiscountPercentage(originalPrice, discountedPrice));
+
+        return convertToDTO(productRepository.save(product));
+    }
+
     /**
      * Reduce stock quantity by specified amount
      */
@@ -297,46 +327,89 @@ public class ProductService {
     }
 
     private ProductDTO convertToDTO(Product product) {
+        BigDecimal discountedPrice = product.getPrice() != null ? product.getPrice() : BigDecimal.ZERO;
+        BigDecimal originalPrice = product.getOriginalPrice();
+        Double discountPercentage = product.getDiscountPercentage();
+        Integer stockQuantity = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
+        List<String> images = product.getImages() != null ? product.getImages() : Collections.emptyList();
+        boolean isActive = Boolean.TRUE.equals(product.getActive());
+
         return ProductDTO.builder()
                 .id(product.getId())
                 .name(product.getName())
                 .description(product.getDescription())
-                .price(product.getPrice())
-                .originalPrice(product.getOriginalPrice())
-                .discountPercentage(product.getDiscountPercentage())
-                .stockQuantity(product.getStockQuantity())
+                .price(discountedPrice)
+                .originalPrice(originalPrice)
+                .discountPercentage(discountPercentage)
+                .stockQuantity(stockQuantity)
                 .storeId(product.getStore().getId())
                 .storeName(product.getStore().getName())
                 .storeLogo(product.getStore().getLogo())
                 .storeAddress(product.getStore().getAddress())
                 .categoryId(product.getCategory().getId())
                 .categoryName(product.getCategory().getName())
-                .images(product.getImages())
+                .images(images)
                 .expiryDate(product.getExpiryDate())
                 .status(product.getStatus())
                 .active(product.getActive())
                 // Computed properties for frontend compatibility
-                .isAvailable(product.getActive() && 
-                           product.getStatus() == ProductStatus.AVAILABLE && 
-                           product.getStockQuantity() > 0)
-                .availableQuantity(product.getStockQuantity())
-                .imageUrl(!product.getImages().isEmpty() ? product.getImages().get(0) : null)
+                .isAvailable(isActive &&
+                        product.getStatus() == ProductStatus.AVAILABLE &&
+                        stockQuantity > 0)
+                .availableQuantity(stockQuantity)
+                .imageUrl(!images.isEmpty() ? images.get(0) : null)
                 .expirationDate(product.getExpiryDate() != null ? product.getExpiryDate().toString() : null)
-                .isFeatured(product.getDiscountPercentage() != null && product.getDiscountPercentage() > 0)
+                .isFeatured(discountPercentage != null && discountPercentage > 0)
                 .rating(0.0) // Default rating for now
                 .build();
+    }
+
+    private Double calculateDiscountPercentage(BigDecimal originalPrice, BigDecimal discountedPrice) {
+        if (originalPrice == null || originalPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        if (discountedPrice == null || discountedPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        if (discountedPrice.compareTo(originalPrice) >= 0) {
+            return 0.0;
+        }
+        BigDecimal discount = originalPrice.subtract(discountedPrice)
+                .divide(originalPrice, 4, java.math.RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100));
+        return discount.doubleValue();
     }
 
     private void updateProductFromDTO(Product product, ProductDTO dto) {
         product.setName(dto.getName());
         product.setDescription(dto.getDescription());
-        product.setPrice(dto.getPrice());
-        product.setOriginalPrice(dto.getOriginalPrice());
-        product.setDiscountPercentage(dto.getDiscountPercentage());
-        product.setStockQuantity(dto.getStockQuantity());
-        product.setImages(dto.getImages());
+        product.setPrice(resolvePrice(dto.getPrice(), product.getPrice()));
+        product.setOriginalPrice(dto.getOriginalPrice() != null ? dto.getOriginalPrice() : product.getOriginalPrice());
+        product.setDiscountPercentage(dto.getDiscountPercentage() != null
+                ? dto.getDiscountPercentage()
+                : product.getDiscountPercentage());
+        product.setStockQuantity(resolveStockQuantity(dto.getStockQuantity(), product.getStockQuantity()));
+        if (dto.getImages() != null) {
+            product.setImages(dto.getImages());
+        } else if (product.getImages() == null) {
+            product.setImages(new ArrayList<>());
+        }
         product.setExpiryDate(dto.getExpiryDate());
         product.setStatus(dto.getStatus());
         product.setActive(dto.getActive());
+    }
+
+    private BigDecimal resolvePrice(BigDecimal requestedPrice, BigDecimal currentPrice) {
+        if (requestedPrice != null) {
+            return requestedPrice;
+        }
+        return currentPrice;
+    }
+
+    private Integer resolveStockQuantity(Integer requestedQuantity, Integer currentQuantity) {
+        if (requestedQuantity != null) {
+            return Math.max(requestedQuantity, 0);
+        }
+        return currentQuantity;
     }
 }

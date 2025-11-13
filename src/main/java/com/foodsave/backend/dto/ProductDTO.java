@@ -31,7 +31,6 @@ public class ProductDTO {
     @Size(max = 1000, message = "Description cannot exceed 1000 characters")
     private String description;
     
-    @NotNull(message = "Price is required")
     @Positive(message = "Price must be greater than 0")
     private BigDecimal price;
     
@@ -41,7 +40,6 @@ public class ProductDTO {
     @PositiveOrZero(message = "Discount percentage must be 0 or greater")
     private Double discountPercentage;
     
-    @NotNull(message = "Stock quantity is required")
     @PositiveOrZero(message = "Stock quantity must be 0 or greater")
     private Integer stockQuantity;
     
@@ -89,14 +87,20 @@ public class ProductDTO {
         } catch (Exception e) {
             // fallback: leave imagesCopy empty
         }
+        BigDecimal discountedPrice = product.getPrice() != null ? product.getPrice() : BigDecimal.ZERO;
+        BigDecimal originalPrice = product.getOriginalPrice();
+        Double discountPercentage = product.getDiscountPercentage();
+        Integer stockQuantity = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
+        boolean isActive = Boolean.TRUE.equals(product.getActive());
+
         return ProductDTO.builder()
                 .id(product.getId())
                 .name(product.getName())
                 .description(product.getDescription())
-                .price(product.getPrice())
-                .originalPrice(product.getOriginalPrice())
-                .discountPercentage(product.getDiscountPercentage())
-                .stockQuantity(product.getStockQuantity())
+                .price(discountedPrice)
+                .originalPrice(originalPrice)
+                .discountPercentage(discountPercentage)
+                .stockQuantity(stockQuantity)
                 .storeId(product.getStore().getId())
                 .storeName(product.getStore().getName())
                 .storeLogo(product.getStore().getLogo())
@@ -108,13 +112,13 @@ public class ProductDTO {
                 .status(product.getStatus())
                 .active(product.getActive())
                 // Computed properties for frontend compatibility
-                .isAvailable(product.getActive() && 
-                           product.getStatus() == ProductStatus.AVAILABLE && 
-                           product.getStockQuantity() > 0)
-                .availableQuantity(product.getStockQuantity())
+                .isAvailable(isActive &&
+                           product.getStatus() == ProductStatus.AVAILABLE &&
+                           stockQuantity > 0)
+                .availableQuantity(stockQuantity)
                 .imageUrl(!imagesCopy.isEmpty() ? imagesCopy.get(0) : null)
                 .expirationDate(product.getExpiryDate() != null ? product.getExpiryDate().toString() : null)
-                .isFeatured(product.getDiscountPercentage() != null && product.getDiscountPercentage() > 0)
+                .isFeatured(discountPercentage != null && discountPercentage > 0)
                 .rating(0.0) // Default rating for now
                 .createdAt(product.getCreatedAt() != null ? product.getCreatedAt().toString() : null)
                 .updatedAt(product.getUpdatedAt() != null ? product.getUpdatedAt().toString() : null)
