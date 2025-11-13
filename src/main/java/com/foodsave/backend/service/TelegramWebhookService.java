@@ -23,7 +23,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -57,11 +56,6 @@ public class TelegramWebhookService {
             DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm", new Locale("ru"));
     private static final ZoneId DEFAULT_TIME_ZONE = ZoneId.of("Asia/Almaty");
 
-    @Transactional(noRollbackFor = {
-            org.springframework.security.core.AuthenticationException.class,
-            org.springframework.security.authentication.BadCredentialsException.class,
-            IllegalArgumentException.class
-    })
     public void handleUpdate(TelegramUpdate update) {
         if (update == null) {
             return;
