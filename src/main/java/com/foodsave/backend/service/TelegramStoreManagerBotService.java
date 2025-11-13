@@ -32,7 +32,7 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
-@Transactional
+@Transactional(noRollbackFor = {BadCredentialsException.class, AuthenticationException.class})
 @Slf4j
 public class TelegramStoreManagerBotService {
 
