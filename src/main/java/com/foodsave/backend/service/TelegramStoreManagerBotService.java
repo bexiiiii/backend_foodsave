@@ -23,7 +23,6 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -32,7 +31,6 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(noRollbackFor = {BadCredentialsException.class, AuthenticationException.class})
 @Slf4j
 public class TelegramStoreManagerBotService {
 
@@ -222,10 +220,9 @@ public class TelegramStoreManagerBotService {
     private void attemptLogin(Long chatId, TelegramSession session, String password) {
         String email = session.getPendingEmail();
         if (email == null || email.isBlank()) {
-            session.setState(TelegramSessionState.AWAITING_EMAIL);
-            telegramSessionService.save(session);
+            telegramSessionService.resetSession(chatId);
             telegramBotService.sendMessage(chatId, new TelegramBotService.TelegramMessagePayload(
-                    "Сначала введите e-mail. Отправьте команду /login ещё раз.",
+                    "Сессия истекла. Отправьте команду /login для входа.",
                     null,
                     null,
                     null
@@ -239,10 +236,10 @@ public class TelegramStoreManagerBotService {
             );
             authentication.getPrincipal(); // Trigger validation
         } catch (BadCredentialsException ex) {
-            session.setState(TelegramSessionState.AWAITING_PASSWORD);
-            telegramSessionService.save(session);
+            // Сбрасываем состояние, чтобы пользователь мог начать заново
+            telegramSessionService.resetSession(chatId);
             telegramBotService.sendMessage(chatId, new TelegramBotService.TelegramMessagePayload(
-                    "Неверный e-mail или пароль. Попробуйте ещё раз ввести пароль. Чтобы начать заново, отправьте /login.",
+                    "Неверный e-mail или пароль. Попробуйте войти заново с помощью команды /login.",
                     null,
                     null,
                     null
@@ -250,37 +247,37 @@ public class TelegramStoreManagerBotService {
             return;
         } catch (AuthenticationException ex) {
             log.error("Telegram login failed for email {}", email, ex);
+            telegramSessionService.resetSession(chatId);
             telegramBotService.sendMessage(chatId, new TelegramBotService.TelegramMessagePayload(
                     "Не удалось выполнить вход. Попробуйте позже или обратитесь в поддержку.",
                     null,
                     null,
                     null
             ));
-            telegramSessionService.resetSession(chatId);
             return;
         }
 
         User user = userRepository.findByEmail(email)
                 .orElse(null);
         if (user == null) {
+            telegramSessionService.resetSession(chatId);
             telegramBotService.sendMessage(chatId, new TelegramBotService.TelegramMessagePayload(
                     "Пользователь не найден. Обратитесь к администратору.",
                     null,
                     null,
                     null
             ));
-            telegramSessionService.resetSession(chatId);
             return;
         }
 
         if (!user.isActive()) {
+            telegramSessionService.resetSession(chatId);
             telegramBotService.sendMessage(chatId, new TelegramBotService.TelegramMessagePayload(
                     "Этот аккаунт отключён. Свяжитесь со службой поддержки.",
                     null,
                     null,
                     null
             ));
-            telegramSessionService.resetSession(chatId);
             return;
         }
 
