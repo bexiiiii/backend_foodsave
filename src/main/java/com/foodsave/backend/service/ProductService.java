@@ -385,9 +385,7 @@ public class ProductService {
         product.setDescription(dto.getDescription());
         product.setPrice(resolvePrice(dto.getPrice(), product.getPrice()));
         product.setOriginalPrice(dto.getOriginalPrice() != null ? dto.getOriginalPrice() : product.getOriginalPrice());
-        product.setDiscountPercentage(dto.getDiscountPercentage() != null
-                ? dto.getDiscountPercentage()
-                : product.getDiscountPercentage());
+        product.setDiscountPercentage(calculateDiscountPercentage(product.getOriginalPrice(), product.getPrice()));
         product.setStockQuantity(resolveStockQuantity(dto.getStockQuantity(), product.getStockQuantity()));
         if (dto.getImages() != null) {
             product.setImages(dto.getImages());
