@@ -24,7 +24,7 @@ public class Category extends BaseEntity {
     @Column(length = 500)
     private String description;
 
-    @Column(name = "image_url")
+    @Column(name = "image_url", columnDefinition = "TEXT")
     private String imageUrl;
 
     @OneToMany(mappedBy = "category")

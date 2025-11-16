@@ -14,6 +14,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -36,17 +37,29 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .authorizeHttpRequests(auth -> auth
+
+                // Always allow CORS preflight checks
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
                 // Swagger UI
                 .requestMatchers("/swagger-ui/**").permitAll()
                 .requestMatchers("/swagger-ui.html").permitAll()
                 .requestMatchers("/v3/api-docs/**").permitAll()
                 .requestMatchers("/swagger-resources/**").permitAll()
                 .requestMatchers("/webjars/**").permitAll()
+
+                // Static uploads
+                .requestMatchers("/uploads/**").permitAll()
+                .requestMatchers("/api/uploads/**").permitAll()
                 
                 // Auth endpoints
                 .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/telegram/**").permitAll()
                 .requestMatchers("/api/users/**").permitAll()
                 .requestMatchers("/api/permissions/**").permitAll() // Временно для тестирования
+                
+                // Mini App endpoints - require authentication via Telegram WebApp
+                .requestMatchers("/api/miniapp/**").authenticated()
                 
                 // Public product endpoints - more specific first
                 .requestMatchers(HttpMethod.GET, "/api/products/featured").permitAll()
@@ -87,23 +100,34 @@ public class SecurityConfig {
     }
 
     @Bean
+    public WebSecurityCustomizer webSecurityCustomizer() {
+        return (web) -> web.ignoring().requestMatchers("/uploads/**", "/api/uploads/**");
+    }
+
+    @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(Arrays.asList(
-            "http://localhost:3000", 
+            "https://foodsave.kz",
+            "https://miniapp.foodsave.kz",
+            "https://admin.foodsave.kz",
+            "https://partner.foodsave.kz",
+            "https://vendor.foodsave.kz",
+            "https://web.telegram.org",
+            "https://miniapp.telegram.org",
+            "https://t.me",
+            "http://localhost:3000",
             "http://localhost:3001",
-            "http://192.168.8.147:3000"
+            "http://localhost:3002",
+            "http://192.168.8.147:3000",
+            "http://vendor.foodsave.kz"
+        ));
+        configuration.setAllowedOriginPatterns(Arrays.asList(
+            "https://*.foodsave.kz",
+            "https://*.telegram.org"
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList(
-            "Authorization",
-            "Content-Type",
-            "X-Requested-With",
-            "Accept",
-            "Origin",
-            "Access-Control-Request-Method",
-            "Access-Control-Request-Headers"
-        ));
+        configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setExposedHeaders(Arrays.asList("Authorization"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);

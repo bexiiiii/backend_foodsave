@@ -60,12 +60,16 @@ public class CartItem {
     }
 
     public BigDecimal getSubtotal() {
-        return product.getPrice().multiply(BigDecimal.valueOf(quantity));
+        BigDecimal unitPrice = product.getPrice() != null ? product.getPrice() : BigDecimal.ZERO;
+        return unitPrice.multiply(BigDecimal.valueOf(quantity));
     }
 
     public BigDecimal getDiscount() {
+        BigDecimal unitPrice = product.getPrice() != null ? product.getPrice() : BigDecimal.ZERO;
         if (product.getDiscountPercentage() != null && product.getDiscountPercentage() > 0) {
-            return product.getPrice().multiply(BigDecimal.valueOf(product.getDiscountPercentage() / 100.0)).multiply(BigDecimal.valueOf(quantity));
+            return unitPrice
+                    .multiply(BigDecimal.valueOf(product.getDiscountPercentage() / 100.0))
+                    .multiply(BigDecimal.valueOf(quantity));
         }
         return BigDecimal.ZERO;
     }

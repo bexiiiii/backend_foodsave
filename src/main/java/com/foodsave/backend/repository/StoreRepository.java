@@ -24,6 +24,8 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
     
     Optional<Store> findByManager(User manager);
     
+    List<Store> findAllByManager(User manager);
+    
     List<Store> findByActiveTrue();
     
     List<Store> findByActiveAndStatus(boolean active, StoreStatus status);

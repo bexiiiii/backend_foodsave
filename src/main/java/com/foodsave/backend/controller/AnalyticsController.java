@@ -22,12 +22,13 @@ public class AnalyticsController {
     private final AnalyticsService analyticsService;
 
     @GetMapping("/daily-sales")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('STORE_MANAGER') or hasRole('STORE_OWNER')")
     public ResponseEntity<List<AnalyticsDTO.DailySalesAnalytics>> getDailySalesAnalytics(
             @RequestParam(defaultValue = "2024-01-01") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam(defaultValue = "2024-12-31") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+            @RequestParam(defaultValue = "2024-12-31") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false) Long storeId) {
         try {
-            List<AnalyticsDTO.DailySalesAnalytics> analytics = analyticsService.getDailySalesAnalytics(startDate, endDate);
+            List<AnalyticsDTO.DailySalesAnalytics> analytics = analyticsService.getDailySalesAnalytics(startDate, endDate, storeId);
             return ResponseEntity.ok(analytics);
         } catch (Exception e) {
             throw new ApiException("Failed to fetch daily sales analytics: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
@@ -35,7 +36,7 @@ public class AnalyticsController {
     }
 
     @GetMapping("/general")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('STORE_MANAGER')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('STORE_MANAGER') or hasRole('STORE_OWNER')")
     public ResponseEntity<Map<String, Object>> getGeneralAnalytics() {
         try {
             return ResponseEntity.ok(analyticsService.getGeneralAnalytics());
@@ -45,7 +46,7 @@ public class AnalyticsController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('STORE_MANAGER') or hasRole('STORE_OWNER')")
     public ResponseEntity<Map<String, Object>> getAnalytics() {
         try {
             Map<String, Object> analytics = analyticsService.getGeneralAnalytics();

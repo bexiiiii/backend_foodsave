@@ -41,9 +41,8 @@ public class Product extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @NotNull(message = "Price is required")
     @Positive(message = "Price must be greater than 0")
-    @Column(nullable = false)
+    @Column
     private BigDecimal price;
 
     @Positive(message = "Original price must be greater than 0")
@@ -53,9 +52,8 @@ public class Product extends BaseEntity {
     @Max(value = 100, message = "Discount percentage must be between 0 and 100")
     private Double discountPercentage;
 
-    @NotNull(message = "Stock quantity is required")
     @Min(value = 0, message = "Stock quantity cannot be negative")
-    @Column(nullable = false)
+    @Column
     private Integer stockQuantity;
 
     @NotNull(message = "Product status is required")
@@ -73,7 +71,7 @@ public class Product extends BaseEntity {
 
     @ElementCollection
     @CollectionTable(name = "product_images", joinColumns = @JoinColumn(name = "product_id"))
-    @Column(name = "image_url")
+    @Column(name = "image_url", columnDefinition = "TEXT")
     @Builder.Default
     private List<String> images = new ArrayList<>();
 
@@ -132,10 +130,15 @@ public class Product extends BaseEntity {
         images.remove(imageUrl);
     }
 
+    public String getFirstImage() {
+        return images != null && !images.isEmpty() ? images.get(0) : null;
+    }
+
     public double getDiscountedPrice() {
-        if (discountPercentage != null && discountPercentage > 0) {
-            return price.doubleValue() * (1 - discountPercentage / 100.0);
+        double safePrice = price != null ? price.doubleValue() : 0.0;
+        if (discountPercentage != null && discountPercentage > 0 && safePrice > 0) {
+            return safePrice * (1 - discountPercentage / 100.0);
         }
-        return price.doubleValue();
+        return safePrice;
     }
 } 

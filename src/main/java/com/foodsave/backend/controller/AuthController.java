@@ -3,8 +3,10 @@ package com.foodsave.backend.controller;
 import com.foodsave.backend.dto.AuthRequestDTO;
 import com.foodsave.backend.dto.AuthResponseDTO;
 import com.foodsave.backend.dto.RegisterRequestDTO;
+import com.foodsave.backend.dto.TelegramAuthRequestDTO;
 import com.foodsave.backend.dto.UserDTO;
 import com.foodsave.backend.service.AuthService;
+import com.foodsave.backend.service.TelegramAuthService;
 import com.foodsave.backend.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -21,6 +23,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final UserService userService;
+    private final TelegramAuthService telegramAuthService;
 
     @PostMapping("/login")
     @Operation(summary = "Login user")
@@ -32,6 +35,12 @@ public class AuthController {
     @Operation(summary = "Register new user")
     public ResponseEntity<AuthResponseDTO> register(@Valid @RequestBody RegisterRequestDTO request) {
         return ResponseEntity.ok(authService.register(request));
+    }
+
+    @PostMapping("/telegram")
+    @Operation(summary = "Authenticate user via Telegram WebApp init data")
+    public ResponseEntity<AuthResponseDTO> telegramLogin(@Valid @RequestBody TelegramAuthRequestDTO request) {
+        return ResponseEntity.ok(telegramAuthService.authenticate(request.getInitData()));
     }
 
     @PostMapping("/verify-email")
@@ -58,5 +67,12 @@ public class AuthController {
     @Operation(summary = "Get current user information")
     public ResponseEntity<UserDTO> getCurrentUser() {
         return ResponseEntity.ok(userService.getCurrentUser());
+    }
+
+    @PostMapping("/dev-login")
+    @Operation(summary = "Development login - creates temporary manager token")
+    public ResponseEntity<AuthResponseDTO> devLogin(@RequestParam(defaultValue = "STORE_MANAGER") String role) {
+        // Только для разработки - создает временного пользователя с нужной ролью
+        return ResponseEntity.ok(authService.createDevToken(role));
     }
 }

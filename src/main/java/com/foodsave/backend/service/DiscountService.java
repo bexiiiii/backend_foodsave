@@ -98,6 +98,7 @@ public class DiscountService {
         if (discountPercentage < 0 || discountPercentage > 100) {
             throw new IllegalArgumentException("Discount percentage must be between 0 and 100");
         }
-        return product.getPrice().doubleValue() * (1 - discountPercentage / 100.0);
+        double basePrice = product.getPrice() != null ? product.getPrice().doubleValue() : 0.0;
+        return basePrice * (1 - discountPercentage / 100.0);
     }
 } 
