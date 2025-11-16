@@ -58,6 +58,9 @@ public class SecurityConfig {
                 .requestMatchers("/api/users/**").permitAll()
                 .requestMatchers("/api/permissions/**").permitAll() // Временно для тестирования
                 
+                // Mini App endpoints - require authentication via Telegram WebApp
+                .requestMatchers("/api/miniapp/**").authenticated()
+                
                 // Public product endpoints - more specific first
                 .requestMatchers(HttpMethod.GET, "/api/products/featured").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/products/categories").permitAll()

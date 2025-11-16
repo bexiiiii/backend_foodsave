@@ -42,17 +42,26 @@ public class MiniAppReservationService {
 
     @Transactional
     public OrderDTO createReservation(MiniAppReservationRequest request) {
+        log.info("=== RESERVATION START === request={}", request);
+        
         int quantity = request == null ? 1 : Math.max(1, request.normalizedQuantity());
         Long productId = request != null ? request.productId() : null;
 
+        log.info("Parsed request: productId={}, quantity={}", productId, quantity);
+
         if (productId == null) {
+            log.error("Product ID is null");
             throw new IllegalArgumentException("Product id is required for reservation");
         }
 
         User user = securityUtils.getCurrentUser();
         if (user == null) {
+            log.error("getCurrentUser() returned null");
             throw new IllegalStateException("Не удалось определить пользователя. Откройте мини-приложение через Telegram и повторите попытку.");
         }
+
+        log.info("User authenticated: userId={}, telegramId={}", 
+            user.getId(), user.getTelegramUserId());
 
         if (user.getTelegramUserId() == null) {
             log.warn("Mini-app reservation requested by user {} without linked telegram id", user.getId());
@@ -61,14 +70,19 @@ public class MiniAppReservationService {
 
         Product product;
         try {
+            log.info("Reserving product stock...");
             product = productService.reserveProductStock(productId, quantity);
+            log.info("Product reserved: id={}, name={}, price={}", 
+                product.getId(), product.getName(), product.getPrice());
         } catch (EntityNotFoundException ex) {
+            log.error("Product not found: {}", productId);
             throw new ResourceNotFoundException("Product not found with id: " + productId);
         } catch (InsufficientStockException ex) {
             log.warn("Insufficient stock for product {} (requested={})", productId, quantity);
             throw new IllegalArgumentException("Недостаточно коробок на складе. Попробуйте уменьшить количество или выбрать другой продукт.");
         }
 
+        log.info("Creating order...");
         Order order = new Order();
         order.setUser(user);
         order.setStore(product.getStore());
@@ -94,13 +108,24 @@ public class MiniAppReservationService {
         order.addItem(item);
         order.calculateTotals();
 
+        log.info("Saving order: orderNumber={}", order.getOrderNumber());
         Order savedOrder = orderRepository.save(order);
+        log.info("Order saved: orderId={}, orderNumber={}", 
+            savedOrder.getId(), savedOrder.getOrderNumber());
+        
         log.info("Mini-app reservation order {} created for user {} (product {} store {})",
                 savedOrder.getOrderNumber(), user.getId(), product.getId(),
                 product.getStore() != null ? product.getStore().getId() : null);
 
-        sendTelegramConfirmation(user, savedOrder, product);
+        log.info("Sending Telegram confirmation...");
+        try {
+            sendTelegramConfirmation(user, savedOrder, product);
+            log.info("Telegram confirmation sent");
+        } catch (Exception e) {
+            log.error("Failed to send Telegram confirmation", e);
+        }
 
+        log.info("=== RESERVATION COMPLETE === orderId={}", savedOrder.getId());
         return OrderDTO.fromEntity(savedOrder);
     }
 
