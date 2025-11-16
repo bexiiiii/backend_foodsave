@@ -193,6 +193,7 @@ public class TelegramWebhookService {
                 "Открой мини‑приложение, чтобы выбрать коробку со скидкой и забронировать её.");
 
         String webAppUrl = ensureHttps(miniAppBaseUrl);
+        log.info("Sending welcome message to chatId={}, webAppUrl={}", chatId, webAppUrl);
         telegramBotService.sendWebAppMessage(chatId, welcomeText, "Открыть FoodSave Mini App", webAppUrl);
     }
 

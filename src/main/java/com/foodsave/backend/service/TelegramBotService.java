@@ -110,7 +110,7 @@ public class TelegramBotService {
             return;
         }
         if (buttonText == null || buttonText.isBlank() || webAppUrl == null || webAppUrl.isBlank()) {
-            log.warn("WebApp button requires non-empty text and url");
+            log.warn("WebApp button requires non-empty text and url. buttonText={}, webAppUrl={}", buttonText, webAppUrl);
             return;
         }
 
@@ -130,9 +130,11 @@ public class TelegramBotService {
                 List.of(List.of(button))
         ));
 
+        log.info("Sending WebApp message to chatId={}, webAppUrl={}, payload={}", chatId, webAppUrl, payload);
+
         try {
             ResponseEntity<String> response = getRestTemplate().postForEntity(url, payload, String.class);
-            log.debug("Telegram sendWebAppMessage status: {}", response.getStatusCodeValue());
+            log.info("Telegram sendWebAppMessage status: {}, response: {}", response.getStatusCode().value(), response.getBody());
         } catch (Exception e) {
             log.error("Failed to send Telegram web app message", e);
         }
@@ -166,7 +168,7 @@ public class TelegramBotService {
 
         try {
             ResponseEntity<String> response = getRestTemplate().postForEntity(url, payload, String.class);
-            log.debug("Telegram sendMessageWithKeyboard status: {}", response.getStatusCodeValue());
+            log.debug("Telegram sendMessageWithKeyboard status: {}", response.getStatusCode().value());
         } catch (Exception e) {
             log.error("Failed to send Telegram message with keyboard", e);
         }

@@ -102,8 +102,7 @@ public class ProductService {
         return null;
     }
 
-    // Temporarily disabled caching due to LinkedHashMap serialization issue
-    // Will re-enable after cache cleanup
+    @Cacheable(value = "products", key = "'product:' + #id")
     public ProductDTO getProductById(Long id) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found"));

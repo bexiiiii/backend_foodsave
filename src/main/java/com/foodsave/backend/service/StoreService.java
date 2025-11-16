@@ -12,6 +12,9 @@ import com.foodsave.backend.repository.ProductRepository;
 import com.foodsave.backend.security.SecurityUtils;
 import com.foodsave.backend.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
@@ -41,6 +44,7 @@ public class StoreService {
                 .map(StoreDTO::fromEntity);
     }
 
+    @Cacheable(value = "stores", key = "'active'")
     public List<StoreDTO> getActiveStores() {
         return storeRepository.findByActiveAndStatus(true, StoreStatus.ACTIVE)
                 .stream()
