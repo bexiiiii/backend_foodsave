@@ -23,14 +23,20 @@ public class TelegramWebhookController {
 
     @PostMapping("/webhook")
     public ResponseEntity<Void> handleWebhook(@RequestBody TelegramUpdate update) {
-        log.info("Client bot webhook received");
+        Long chatId = extractChatId(update);
+        Long userId = extractUserId(update);
+        String text = extractText(update);
+        log.info("=== CLIENT BOT WEBHOOK === chatId={}, userId={}, text='{}'", chatId, userId, text);
         telegramWebhookService.handleUpdate(update);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/webhook/manager")
     public ResponseEntity<Void> handleManagerWebhook(@RequestBody TelegramUpdate update) {
-        log.info("Manager bot webhook received");
+        Long chatId = extractChatId(update);
+        Long userId = extractUserId(update);
+        String text = extractText(update);
+        log.info("=== MANAGER BOT WEBHOOK === chatId={}, userId={}, text='{}'", chatId, userId, text);
         
         if (update == null) {
             log.warn("Received null update");
@@ -43,14 +49,14 @@ public class TelegramWebhookController {
         
         com.foodsave.backend.dto.telegram.TelegramMessage message = resolveMessage(update);
         com.foodsave.backend.dto.telegram.TelegramUser from = resolveUser(update);
-        Long chatId = resolveChatId(message);
+        Long managerChatId = resolveChatId(message);
         
-        if (chatId == null) {
+        if (managerChatId == null) {
             log.warn("No chatId in manager bot update");
             return ResponseEntity.ok().build();
         }
         
-        telegramStoreManagerBotService.handleUpdate(update, message, from, chatId);
+        telegramStoreManagerBotService.handleUpdate(update, message, from, managerChatId);
         return ResponseEntity.ok().build();
     }
 
@@ -95,6 +101,40 @@ public class TelegramWebhookController {
     private Long resolveChatId(com.foodsave.backend.dto.telegram.TelegramMessage message) {
         if (message != null && message.chat() != null) {
             return message.chat().id();
+        }
+        return null;
+    }
+    
+    private Long extractChatId(TelegramUpdate update) {
+        if (update == null) return null;
+        if (update.message() != null && update.message().chat() != null) {
+            return update.message().chat().id();
+        }
+        if (update.callbackQuery() != null && update.callbackQuery().message() != null 
+            && update.callbackQuery().message().chat() != null) {
+            return update.callbackQuery().message().chat().id();
+        }
+        return null;
+    }
+    
+    private Long extractUserId(TelegramUpdate update) {
+        if (update == null) return null;
+        if (update.message() != null && update.message().from() != null) {
+            return update.message().from().id();
+        }
+        if (update.callbackQuery() != null && update.callbackQuery().from() != null) {
+            return update.callbackQuery().from().id();
+        }
+        return null;
+    }
+    
+    private String extractText(TelegramUpdate update) {
+        if (update == null) return null;
+        if (update.message() != null && update.message().text() != null) {
+            return update.message().text();
+        }
+        if (update.callbackQuery() != null && update.callbackQuery().data() != null) {
+            return "callback: " + update.callbackQuery().data();
         }
         return null;
     }
