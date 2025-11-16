@@ -44,7 +44,7 @@ public class TelegramWebhookService {
     private final UserRepository userRepository;
     private final OrderRepository orderRepository;
     private final ProductService productService;
-    private final TelegramStoreManagerBotService telegramStoreManagerBotService;
+    // Note: TelegramStoreManagerBotService is for a separate manager bot (token: 8489367964)
 
     @Value("${telegram.miniapp.base-url:https://miniapp.foodsave.kz}")
     private String miniAppBaseUrl;
@@ -57,8 +57,24 @@ public class TelegramWebhookService {
     private static final ZoneId DEFAULT_TIME_ZONE = ZoneId.of("Asia/Almaty");
 
     public void handleUpdate(TelegramUpdate update) {
+        log.info("=== TELEGRAM WEBHOOK UPDATE RECEIVED ===");
+        
         if (update == null) {
+            log.warn("Update is null!");
             return;
+        }
+
+        log.info("Update details: message={}, callbackQuery={}", 
+            update.message() != null, 
+            update.callbackQuery() != null);
+
+        if (update.message() != null) {
+            TelegramMessage msg = update.message();
+            log.info("Message: messageId={}, chatId={}, text='{}', from={}", 
+                msg.messageId(),
+                msg.chat() != null ? msg.chat().id() : null,
+                msg.text(),
+                msg.from() != null ? msg.from().id() : null);
         }
 
         log.info("Received Telegram update: messageId={}, hasCallback={}, hasWebAppData={}",
@@ -71,21 +87,24 @@ public class TelegramWebhookService {
         TelegramUser from = resolveUser(update);
         Long chatId = resolveChatId(message);
 
+        log.info("Resolved: chatId={}, from={}, hasMessage={}", chatId, from != null ? from.id() : null, message != null);
+
         if (chatId == null) {
             log.warn("Received Telegram update without chat id: {}", update);
             return;
         }
 
         if (handleWebAppData(update, message, from, chatId)) {
+            log.info("WebAppData handled");
             return;
         }
 
-        if (telegramStoreManagerBotService.handleUpdate(update, message, from, chatId)) {
-            return;
-        }
-
+        // Handle text messages (including /start and /help)
         if (message != null && message.text() != null) {
+            log.info("Handling text message: '{}'", message.text());
             handleTextMessage(message.text(), chatId, from);
+        } else {
+            log.info("No text message to handle");
         }
     }
 
