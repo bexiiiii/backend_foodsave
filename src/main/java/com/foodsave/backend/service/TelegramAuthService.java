@@ -129,15 +129,24 @@ public class TelegramAuthService {
                 .toList();
         String dataCheckString = String.join("\n", dataCheckList);
 
+        log.info("DEBUG Telegram Auth - Data check string: {}", dataCheckString);
+        log.info("DEBUG Telegram Auth - Received hash: {}", receivedHash);
+        log.info("DEBUG Telegram Auth - Bot token length: {}", botToken.length());
+
         byte[] secretKey = hmacSha256(
                 "WebAppData".getBytes(StandardCharsets.UTF_8),
                 botToken.getBytes(StandardCharsets.UTF_8)
         );
         String calculatedHash = hmacSha256Hex(secretKey, dataCheckString);
 
+        log.info("DEBUG Telegram Auth - Calculated hash: {}", calculatedHash);
+
         if (!calculatedHash.equalsIgnoreCase(receivedHash)) {
+            log.error("Hash validation failed! Expected: {}, Got: {}", calculatedHash, receivedHash);
             throw new ApiException("Invalid Telegram init data hash", HttpStatus.UNAUTHORIZED);
         }
+        
+        log.info("DEBUG Telegram Auth - Hash validation successful");
     }
 
     private void validateAuthDate(Map<String, String> payload) {
