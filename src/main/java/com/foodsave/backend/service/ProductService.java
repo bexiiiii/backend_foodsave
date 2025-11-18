@@ -112,6 +112,26 @@ public class ProductService {
     public Page<ProductDTO> getProductsByStore(Long storeId, Pageable pageable) {
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new EntityNotFoundException("Store not found"));
+        
+        // Check if current user is manager of this store
+        org.springframework.security.core.Authentication authentication = 
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        
+        if (authentication != null && authentication.getPrincipal() instanceof com.foodsave.backend.security.UserPrincipal) {
+            com.foodsave.backend.security.UserPrincipal userPrincipal = 
+                (com.foodsave.backend.security.UserPrincipal) authentication.getPrincipal();
+            
+            if (userPrincipal.getRole() == com.foodsave.backend.domain.enums.UserRole.STORE_MANAGER) {
+                Long managedStoreId = getCurrentManagedStoreId(userPrincipal.getId());
+                // If manager is viewing their own store, show all products
+                if (managedStoreId != null && managedStoreId.equals(storeId)) {
+                    log.info("Manager {} viewing their store {} products", userPrincipal.getId(), storeId);
+                    return productRepository.findByStoreId(storeId, pageable)
+                            .map(this::convertToDTO);
+                }
+            }
+        }
+        
         return productRepository.findByStore(store, pageable)
                 .map(this::convertToDTO);
     }
@@ -125,7 +145,8 @@ public class ProductService {
 
     // Note: Page objects don't cache well with Redis due to serialization issues
     public Page<ProductDTO> getFeaturedProducts(Pageable pageable) {
-        return productRepository.findByDiscountPercentageGreaterThan(0.0, pageable)
+        // Return all active products instead of only discounted ones
+        return productRepository.findAllActiveProducts(pageable)
                 .map(this::convertToDTO);
     }
 
@@ -313,6 +334,11 @@ public class ProductService {
         Product product = productRepository.findByIdForUpdate(productId)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found"));
 
+        // Check if product is active
+        if (!Boolean.TRUE.equals(product.getActive())) {
+            throw new IllegalStateException("Этот продукт недоступен для бронирования");
+        }
+
         int currentStock = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
         if (currentStock < quantity) {
             log.warn("Insufficient stock for product {} (requested={}, available={})",
@@ -382,11 +408,20 @@ public class ProductService {
     private void updateProductFromDTO(Product product, ProductDTO dto) {
         product.setName(dto.getName());
         product.setDescription(dto.getDescription());
-        product.setPrice(resolvePrice(dto.getPrice(), product.getPrice()));
-        product.setOriginalPrice(dto.getOriginalPrice() != null ? dto.getOriginalPrice() : product.getOriginalPrice());
-        product.setDiscountPercentage(dto.getDiscountPercentage() != null
-                ? dto.getDiscountPercentage()
-                : product.getDiscountPercentage());
+        
+        // Set original price and discount percentage
+        BigDecimal originalPrice = dto.getOriginalPrice() != null ? dto.getOriginalPrice() : product.getOriginalPrice();
+        Double discountPercentage = dto.getDiscountPercentage() != null 
+                ? dto.getDiscountPercentage() 
+                : product.getDiscountPercentage();
+        
+        product.setOriginalPrice(originalPrice);
+        product.setDiscountPercentage(discountPercentage);
+        
+        // Auto-calculate price from originalPrice and discountPercentage
+        BigDecimal calculatedPrice = calculateDiscountedPrice(originalPrice, discountPercentage);
+        product.setPrice(calculatedPrice);
+        
         product.setStockQuantity(resolveStockQuantity(dto.getStockQuantity(), product.getStockQuantity()));
         if (dto.getImages() != null) {
             product.setImages(dto.getImages());
@@ -397,12 +432,27 @@ public class ProductService {
         product.setStatus(dto.getStatus());
         product.setActive(dto.getActive());
     }
-
-    private BigDecimal resolvePrice(BigDecimal requestedPrice, BigDecimal currentPrice) {
-        if (requestedPrice != null) {
-            return requestedPrice;
+    
+    /**
+     * Calculate discounted price from original price and discount percentage
+     * Formula: price = originalPrice * (1 - discountPercentage/100)
+     */
+    private BigDecimal calculateDiscountedPrice(BigDecimal originalPrice, Double discountPercentage) {
+        if (originalPrice == null) {
+            return BigDecimal.ZERO;
         }
-        return currentPrice;
+        
+        if (discountPercentage == null || discountPercentage <= 0) {
+            // No discount, return original price
+            return originalPrice;
+        }
+        
+        // Calculate discount: price = originalPrice * (1 - discountPercentage/100)
+        BigDecimal discountMultiplier = BigDecimal.ONE.subtract(
+            BigDecimal.valueOf(discountPercentage).divide(BigDecimal.valueOf(100), 4, java.math.RoundingMode.HALF_UP)
+        );
+        
+        return originalPrice.multiply(discountMultiplier).setScale(2, java.math.RoundingMode.HALF_UP);
     }
 
     private Integer resolveStockQuantity(Integer requestedQuantity, Integer currentQuantity) {

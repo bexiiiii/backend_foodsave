@@ -106,6 +106,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     
     Page<Product> findByDiscountPercentageGreaterThan(Double discountPercentage, Pageable pageable);
     
+    @EntityGraph(attributePaths = {"store", "category"})
+    @Query("SELECT p FROM Product p WHERE p.active = true ORDER BY p.createdAt DESC")
+    Page<Product> findAllActiveProducts(Pageable pageable);
+    
     Page<Product> findByStockQuantityLessThanEqual(Integer threshold, Pageable pageable);
     
     Page<Product> findByExpiryDateIsNotNull(Pageable pageable);
