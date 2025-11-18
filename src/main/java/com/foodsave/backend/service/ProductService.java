@@ -19,6 +19,7 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import java.util.Optional;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -85,20 +86,40 @@ public class ProductService {
 
     private Long getCurrentManagedStoreId(Long managerId) {
         try {
+            log.info("DEBUG: Looking for managed store for manager ID: {}", managerId);
             com.foodsave.backend.entity.User manager = userRepository.findById(managerId).orElse(null);
             
-            if (manager != null) {
-                // Поиск заведения, которым управляет данный менеджер
-                org.springframework.data.domain.Page<com.foodsave.backend.entity.Store> stores = 
-                    storeRepository.findByManager(manager, org.springframework.data.domain.Pageable.unpaged());
-                
-                if (!stores.getContent().isEmpty()) {
-                    return stores.getContent().get(0).getId();
+            if (manager == null) {
+                log.warn("DEBUG: Manager with ID {} not found in database", managerId);
+                return null;
+            }
+            
+            log.info("DEBUG: Found manager: id={}, username={}, role={}", 
+                manager.getId(), manager.getUsername(), manager.getRole());
+            
+            // Поиск заведения, которым управляет данный менеджер
+            Optional<com.foodsave.backend.entity.Store> storeOpt = 
+                storeRepository.findByManager(manager);
+            
+            if (storeOpt.isPresent()) {
+                Long storeId = storeOpt.get().getId();
+                log.info("DEBUG: Found managed store: id={}, name={}", storeId, storeOpt.get().getName());
+                return storeId;
+            } else {
+                log.warn("DEBUG: No store found for manager ID: {}", managerId);
+                log.info("DEBUG: Checking if manager has stores via findAllByManager...");
+                List<com.foodsave.backend.entity.Store> allStores = storeRepository.findAllByManager(manager);
+                log.info("DEBUG: Found {} stores via findAllByManager", allStores.size());
+                if (!allStores.isEmpty()) {
+                    Long storeId = allStores.get(0).getId();
+                    log.info("DEBUG: Using first store from list: id={}, name={}", storeId, allStores.get(0).getName());
+                    return storeId;
                 }
             }
         } catch (Exception e) {
             log.error("Error finding managed store: ", e);
         }
+        log.warn("DEBUG: Returning null - no managed store found");
         return null;
     }
 

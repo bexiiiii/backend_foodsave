@@ -24,8 +24,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.Optional;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -170,35 +171,36 @@ public class StoreService {
 
         // Обновляем менеджера
         if (storeDTO.getManagerId() != null) {
-            // Сбрасываем роль предыдущего менеджера, если он был и не управляет другими магазинами
-            if (store.getManager() != null) {
-                User previousManager = store.getManager();
-                // Проверяем, управляет ли предыдущий менеджер другими магазинами
-                if (!isManagerOfOtherStores(previousManager, store.getId())) {
-                    previousManager.setRole(com.foodsave.backend.domain.enums.UserRole.CUSTOMER);
-                    userRepository.save(previousManager);
+            // Проверяем, изменился ли менеджер
+            Long currentManagerId = store.getManager() != null ? store.getManager().getId() : null;
+            
+            if (!storeDTO.getManagerId().equals(currentManagerId)) {
+                // Сбрасываем роль предыдущего менеджера, если он был и не управляет другими магазинами
+                if (store.getManager() != null) {
+                    User previousManager = store.getManager();
+                    // Проверяем, управляет ли предыдущий менеджер другими магазинами
+                    if (!isManagerOfOtherStores(previousManager, store.getId())) {
+                        previousManager.setRole(com.foodsave.backend.domain.enums.UserRole.CUSTOMER);
+                        userRepository.save(previousManager);
+                    }
                 }
+                
+                // Назначаем нового менеджера
+                User newManager = userRepository.findById(storeDTO.getManagerId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Manager not found with id: " + storeDTO.getManagerId()));
+                
+                newManager.setRole(com.foodsave.backend.domain.enums.UserRole.STORE_MANAGER);
+                userRepository.save(newManager);
+                
+                store.setManager(newManager);
             }
-            
-            // Назначаем нового менеджера
-            User newManager = userRepository.findById(storeDTO.getManagerId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Manager not found with id: " + storeDTO.getManagerId()));
-            
-            newManager.setRole(com.foodsave.backend.domain.enums.UserRole.STORE_MANAGER);
-            userRepository.save(newManager);
-            
-            store.setManager(newManager);
-        } else {
-            // Если менеджер не указан, сбрасываем роль текущего менеджера только если он не управляет другими магазинами
-            if (store.getManager() != null) {
-                User currentManager = store.getManager();
-                // Проверяем, управляет ли текущий менеджер другими магазинами
-                if (!isManagerOfOtherStores(currentManager, store.getId())) {
-                    currentManager.setRole(com.foodsave.backend.domain.enums.UserRole.CUSTOMER);
-                    userRepository.save(currentManager);
-                }
-                store.setManager(null);
-            }
+            // Если managerId совпадает с текущим - не меняем
+        } else if (storeDTO.getManagerId() == null && storeDTO.getManagerName() == null) {
+            // ТОЛЬКО если явно указано что менеджера НЕТ (оба поля null), тогда сбрасываем
+            // Обычно при обновлении через форму, если менеджер не меняется, эти поля просто не отправляются
+            // Поэтому мы НЕ сбрасываем менеджера, если он уже есть
+            log.info("Manager fields are null in update request for store {}, keeping existing manager", id);
+            // НЕ трогаем store.getManager() - оставляем как есть
         }
 
         Store savedStore = storeRepository.save(store);
