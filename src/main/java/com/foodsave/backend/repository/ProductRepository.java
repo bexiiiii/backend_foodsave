@@ -110,6 +110,16 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Query("SELECT p FROM Product p WHERE p.active = true ORDER BY p.createdAt DESC")
     Page<Product> findAllActiveProducts(Pageable pageable);
     
+    // Find all active products with status AVAILABLE (exclude OUT_OF_STOCK)
+    @EntityGraph(attributePaths = {"store", "category"})
+    @Query("SELECT p FROM Product p WHERE p.active = true AND p.status = 'AVAILABLE' ORDER BY p.createdAt DESC")
+    Page<Product> findAllActiveAvailableProducts(Pageable pageable);
+    
+    // Find products by store with status AVAILABLE (exclude OUT_OF_STOCK)
+    @EntityGraph(attributePaths = {"store", "category"})
+    @Query("SELECT p FROM Product p WHERE p.store.id = :storeId AND p.active = true AND p.status = 'AVAILABLE'")
+    Page<Product> findActiveAvailableByStoreId(@Param("storeId") Long storeId, Pageable pageable);
+    
     Page<Product> findByStockQuantityLessThanEqual(Integer threshold, Pageable pageable);
     
     Page<Product> findByExpiryDateIsNotNull(Pageable pageable);

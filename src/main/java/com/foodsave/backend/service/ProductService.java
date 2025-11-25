@@ -144,7 +144,7 @@ public class ProductService {
             
             if (userPrincipal.getRole() == com.foodsave.backend.domain.enums.UserRole.STORE_MANAGER) {
                 Long managedStoreId = getCurrentManagedStoreId(userPrincipal.getId());
-                // If manager is viewing their own store, show all products
+                // If manager is viewing their own store, show all products (including OUT_OF_STOCK)
                 if (managedStoreId != null && managedStoreId.equals(storeId)) {
                     log.info("Manager {} viewing their store {} products", userPrincipal.getId(), storeId);
                     return productRepository.findByStoreId(storeId, pageable)
@@ -153,7 +153,8 @@ public class ProductService {
             }
         }
         
-        return productRepository.findByStore(store, pageable)
+        // For regular users, only show AVAILABLE products (exclude OUT_OF_STOCK)
+        return productRepository.findActiveAvailableByStoreId(storeId, pageable)
                 .map(this::convertToDTO);
     }
 
@@ -166,8 +167,8 @@ public class ProductService {
 
     // Note: Page objects don't cache well with Redis due to serialization issues
     public Page<ProductDTO> getFeaturedProducts(Pageable pageable) {
-        // Return all active products instead of only discounted ones
-        return productRepository.findAllActiveProducts(pageable)
+        // Return all active products with status AVAILABLE (exclude OUT_OF_STOCK)
+        return productRepository.findAllActiveAvailableProducts(pageable)
                 .map(this::convertToDTO);
     }
 
