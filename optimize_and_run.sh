@@ -6,7 +6,12 @@ echo "🚀 Запуск оптимизации FoodSave Backend..."
 
 # 1. Применение индексов к базе данных
 echo "📊 Применение индексов к базе данных..."
-PGPASSWORD=234Bex456 psql -h 188.225.31.57 -U behruz -d foodsave_cloud -f database_indexes.sql
+if [ -z "$DB_PASSWORD" ]; then
+    echo "❌ Ошибка: DB_PASSWORD не установлен"
+    echo "Установите: export DB_PASSWORD=your_password"
+    exit 1
+fi
+PGPASSWORD=$DB_PASSWORD psql -h ${DB_HOST:-188.225.31.57} -U ${DB_USER:-behruz} -d ${DB_NAME:-foodsave_cloud} -f database_indexes.sql
 
 if [ $? -eq 0 ]; then
     echo "✅ Индексы успешно применены"

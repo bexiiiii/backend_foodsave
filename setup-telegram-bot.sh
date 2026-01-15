@@ -3,7 +3,13 @@
 # Настройка Telegram бота для FoodSave
 # Использование: ./setup-telegram-bot.sh <your-backend-url>
 
-BOT_TOKEN="8489367964:AAFuCIQxj-jPJJgEjYqtOH72e0rbv6iB11E"
+if [ -z "$TELEGRAM_MANAGER_BOT_TOKEN" ]; then
+    echo "❌ Ошибка: TELEGRAM_MANAGER_BOT_TOKEN не установлен"
+    echo "Установите: export TELEGRAM_MANAGER_BOT_TOKEN=your_token"
+    exit 1
+fi
+
+BOT_TOKEN="$TELEGRAM_MANAGER_BOT_TOKEN"
 
 # Проверяем аргумент
 if [ -z "$1" ]; then
