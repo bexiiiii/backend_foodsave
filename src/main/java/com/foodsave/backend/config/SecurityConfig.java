@@ -52,31 +52,39 @@ public class SecurityConfig {
                 .requestMatchers("/uploads/**").permitAll()
                 .requestMatchers("/api/uploads/**").permitAll()
                 
-                // Auth endpoints
-                .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/api/telegram/**").permitAll()
-                .requestMatchers("/api/users/**").permitAll()
-                .requestMatchers("/api/permissions/**").permitAll() // Временно для тестирования
+                // Auth endpoints - только регистрация и логин
+                .requestMatchers("/api/auth/login").permitAll()
+                .requestMatchers("/api/auth/register").permitAll()
+                .requestMatchers("/api/auth/telegram/**").permitAll()
+                .requestMatchers("/api/auth/refresh").permitAll()
+                
+                // Telegram webhook - только для Telegram серверов
+                .requestMatchers("/api/telegram/webhook").permitAll()
+                
+                // ЗАКРЫТО: /api/users/** требует аутентификации
+                // ЗАКРЫТО: /api/permissions/** требует аутентификации
                 
                 // Mini App endpoints - require authentication via Telegram WebApp
                 .requestMatchers("/api/miniapp/**").authenticated()
                 
-                // Public product endpoints - more specific first
+                // Public product endpoints - ТОЛЬКО GET для чтения
                 .requestMatchers(HttpMethod.GET, "/api/products/featured").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/products/categories").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/products/store/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/products/*").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/products").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/products").permitAll() // Временно для тестирования
-                .requestMatchers(HttpMethod.PUT, "/api/products/**").permitAll() // Временно для тестирования
-                .requestMatchers(HttpMethod.DELETE, "/api/products/**").permitAll() // Временно для тестирования
+                // ЗАКРЫТО: POST/PUT/DELETE требуют аутентификации
+                .requestMatchers(HttpMethod.POST, "/api/products/**").authenticated()
+                .requestMatchers(HttpMethod.PUT, "/api/products/**").authenticated()
+                .requestMatchers(HttpMethod.DELETE, "/api/products/**").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/categories/**").permitAll()
                 
-                // Public store endpoints
+                // Public store endpoints - только GET
                 .requestMatchers(HttpMethod.GET, "/api/stores/*").permitAll()
                 
-                // Actuator
-                .requestMatchers("/actuator/**").permitAll()
+                // Actuator - только health endpoint
+                .requestMatchers("/actuator/health").permitAll()
+                .requestMatchers("/actuator/**").denyAll()
                 
                 // All other requests need authentication
                 .anyRequest().authenticated()

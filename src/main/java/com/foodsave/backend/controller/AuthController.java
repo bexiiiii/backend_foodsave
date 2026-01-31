@@ -69,10 +69,6 @@ public class AuthController {
         return ResponseEntity.ok(userService.getCurrentUser());
     }
 
-    @PostMapping("/dev-login")
-    @Operation(summary = "Development login - creates temporary manager token")
-    public ResponseEntity<AuthResponseDTO> devLogin(@RequestParam(defaultValue = "STORE_MANAGER") String role) {
-        // Только для разработки - создает временного пользователя с нужной ролью
-        return ResponseEntity.ok(authService.createDevToken(role));
-    }
+    // ⚠️ DEV-LOGIN УДАЛЁН - ЭТО БЫЛ БЭКДОР ДЛЯ ХАКЕРОВ!
+    // Никогда не оставляйте такие эндпоинты в продакшене!
 }
