@@ -23,11 +23,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 public class RateLimitFilter extends OncePerRequestFilter {
 
-    // Конфигурация
-    private static final int MAX_REQUESTS_PER_MINUTE = 100;
-    private static final int MAX_AUTH_REQUESTS_PER_MINUTE = 10;
+    // Конфигурация - увеличенные лимиты для нормальной работы приложения
+    private static final int MAX_REQUESTS_PER_MINUTE = 300; // 300 запросов в минуту
+    private static final int MAX_AUTH_REQUESTS_PER_MINUTE = 60; // 60 auth запросов в минуту
     private static final long WINDOW_MS = 60_000; // 1 минута
-    private static final long BAN_DURATION_MS = 300_000; // 5 минут бан
+    private static final long BAN_DURATION_MS = 60_000; // 1 минута бан (вместо 5)
 
     // Хранилище счётчиков запросов по IP
     private final Map<String, RateLimitRecord> requestCounts = new ConcurrentHashMap<>();
