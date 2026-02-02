@@ -1,5 +1,7 @@
 package com.foodsave.backend.config;
 
+import com.foodsave.backend.security.RateLimitFilter;
+import com.foodsave.backend.security.SecurityFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
@@ -15,6 +17,7 @@ public class FilterConfig {
 
     private final SecurityHeadersFilter securityHeadersFilter;
     private final RateLimitFilter rateLimitFilter;
+    private final SecurityFilter securityFilter;
 
     @Bean
     public FilterRegistrationBean<SecurityHeadersFilter> securityHeadersFilterRegistration() {
@@ -33,6 +36,16 @@ public class FilterConfig {
         registration.addUrlPatterns("/api/*");
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 1);
         registration.setName("rateLimitFilter");
+        return registration;
+    }
+
+    @Bean
+    public FilterRegistrationBean<SecurityFilter> securityFilterRegistration() {
+        FilterRegistrationBean<SecurityFilter> registration = new FilterRegistrationBean<>();
+        registration.setFilter(securityFilter);
+        registration.addUrlPatterns("/api/*");
+        registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 2);
+        registration.setName("securityFilter");
         return registration;
     }
 }
