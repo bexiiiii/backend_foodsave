@@ -186,48 +186,95 @@ public class TelegramWebhookService {
         log.info("Handling text command '{}' from chat {} (user={})", command, chatId,
                 from != null ? from.id() : null);
 
-        if (command.equalsIgnoreCase("/start") || command.toLowerCase(Locale.ROOT).startsWith("/start@")) {
+        if (isCommand(command, "start")) {
             sendWelcomeMessage(chatId);
             return;
         }
 
-        if (command.equalsIgnoreCase("/help") || command.toLowerCase(Locale.ROOT).startsWith("/help@")) {
+        if (isCommand(command, "help")) {
             sendSupportMessage(chatId);
             return;
         }
 
         // Fallback for any other text input
-        telegramBotService.sendMessage(chatId, new TelegramBotService.TelegramMessagePayload(
-                "Чтобы выбрать бокс со скидкой, откройте мини‑приложение FoodSave и нажмите «Забронировать» на нужном товаре.",
-                null,
-                null,
-                null
-        ));
+        String fallbackText = String.join("\n",
+                "Не удалось распознать команду.",
+                "Доступные команды:",
+                "• /start — открыть мини‑приложение",
+                "• /help — помощь и поддержка");
+
+        telegramBotService.sendWebAppMessage(
+                chatId,
+                fallbackText,
+                "Открыть FoodSave",
+                ensureHttps(miniAppBaseUrl)
+        );
     }
 
     private void sendWelcomeMessage(Long chatId) {
+        String supportHandle = normalizeSupportUsername(supportUsername);
         String welcomeText = String.join("\n",
-                "Привет! 👋",
-                "Я бот FoodSave.",
-                "Открой мини‑приложение, чтобы выбрать коробку со скидкой и забронировать её.");
+                "Привет! Я бот FoodSave 👋",
+                "Помогу открыть мини‑приложение и быстро оформить бронь.",
+                "",
+                "Доступные команды:",
+                "• /start — открыть мини‑приложение",
+                "• /help — помощь и контакты поддержки",
+                "",
+                "Поддержка: " + supportHandle);
 
         String webAppUrl = ensureHttps(miniAppBaseUrl);
         log.info("Sending welcome message to chatId={}, webAppUrl={}", chatId, webAppUrl);
-        telegramBotService.sendWebAppMessage(chatId, welcomeText, "Открыть FoodSave Mini App", webAppUrl);
+        telegramBotService.sendWebAppMessage(chatId, welcomeText, "Открыть FoodSave", webAppUrl);
     }
 
     private void sendSupportMessage(Long chatId) {
+        String supportHandle = normalizeSupportUsername(supportUsername);
+        String webAppUrl = ensureHttps(miniAppBaseUrl);
         String supportText = String.join("\n",
-                "Нужна помощь? Мы всегда на связи!",
-                "Напишите в поддержку: @FoodSave_kz ",
-                "Или откройте мини‑приложение, чтобы оформить заказ заново.");
+                "Помощь FoodSave",
+                "",
+                "1) Нажмите кнопку ниже, чтобы открыть мини‑приложение.",
+                "2) Выберите бокс и нажмите «Забронировать».",
+                "3) Подтверждение заказа придёт в этот чат.",
+                "",
+                "Поддержка: " + supportHandle,
+                "",
+                "Чтобы заново открыть мини‑приложение, используйте /start.");
 
-        telegramBotService.sendMessage(chatId, new TelegramBotService.TelegramMessagePayload(
-                supportText,
-                null,
-                null,
-                null
-        ));
+        telegramBotService.sendWebAppMessage(chatId, supportText, "Открыть FoodSave", webAppUrl);
+    }
+
+    private boolean isCommand(String commandToken, String expectedCommand) {
+        if (commandToken == null || commandToken.isBlank() || expectedCommand == null || expectedCommand.isBlank()) {
+            return false;
+        }
+
+        String token = commandToken.trim();
+        if (!token.startsWith("/")) {
+            return false;
+        }
+
+        String withoutSlash = token.substring(1);
+        int botMentionIndex = withoutSlash.indexOf('@');
+        String normalizedCommand = botMentionIndex >= 0
+                ? withoutSlash.substring(0, botMentionIndex)
+                : withoutSlash;
+
+        return normalizedCommand.equalsIgnoreCase(expectedCommand);
+    }
+
+    private String normalizeSupportUsername(String rawUsername) {
+        if (rawUsername == null || rawUsername.isBlank()) {
+            return "@FoodSave_kz";
+        }
+
+        String trimmed = rawUsername.trim();
+        if (trimmed.startsWith("@")) {
+            return trimmed;
+        }
+
+        return "@" + trimmed;
     }
 
     private void respondToReservation(Long chatId, TelegramUser from, ReservationPayload payload) {
@@ -374,7 +421,7 @@ public class TelegramWebhookService {
         } catch (InsufficientStockException ex) {
             log.warn("Reservation failed: insufficient stock for product {} (requested={} telegramId={})",
                     payload.productId(), requestedQuantity, from != null ? from.id() : null);
-            return new ReservationResult(false, null, null, "Упс! Коробка уже закончилась. Выберите, пожалуйста, другую позицию.");
+            return new ReservationResult(false, null, null, "Упс! боксы уже закончились. Выберите, пожалуйста, другую позицию.");
         } catch (IllegalArgumentException ex) {
             log.warn("Reservation failed: invalid quantity {} for product {}", requestedQuantity, payload.productId(), ex);
             return new ReservationResult(false, null, null, "Количество для бронирования указано неверно. Попробуйте ещё раз.");
