@@ -44,7 +44,7 @@ public class UserDTO {
 
     private UserRole role;
 
-    private boolean active;
+    private Boolean active;
 
     private String registrationSource;
 

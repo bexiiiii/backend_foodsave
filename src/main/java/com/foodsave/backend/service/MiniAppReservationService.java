@@ -155,7 +155,7 @@ public class MiniAppReservationService {
 
         StringBuilder messageBuilder = new StringBuilder();
         messageBuilder.append("🧾 Заказ №").append(order.getOrderNumber()).append("\n");
-        messageBuilder.append("Коробка: ").append(orUnknown(product.getName())).append("\n");
+        messageBuilder.append("Бокс: ").append(orUnknown(product.getName())).append("\n");
         messageBuilder.append("Магазин: ").append(store != null ? orUnknown(store.getName()) : "не указано").append("\n");
         if (store != null && store.getAddress() != null && !store.getAddress().isBlank()) {
             messageBuilder.append("Адрес: ").append(store.getAddress()).append("\n");

@@ -3,13 +3,13 @@
 # Настройка Telegram бота для FoodSave
 # Использование: ./setup-telegram-bot.sh <your-backend-url>
 
-if [ -z "$TELEGRAM_MANAGER_BOT_TOKEN" ]; then
-    echo "❌ Ошибка: TELEGRAM_MANAGER_BOT_TOKEN не установлен"
-    echo "Установите: export TELEGRAM_MANAGER_BOT_TOKEN=your_token"
+if [ -z "${TELEGRAM_BOT_TOKEN:-}" ]; then
+    echo "❌ Ошибка: TELEGRAM_BOT_TOKEN не установлен"
+    echo "Установите: export TELEGRAM_BOT_TOKEN=your_token"
     exit 1
 fi
 
-BOT_TOKEN="$TELEGRAM_MANAGER_BOT_TOKEN"
+BOT_TOKEN="$TELEGRAM_BOT_TOKEN"
 
 # Проверяем аргумент
 if [ -z "$1" ]; then
@@ -40,10 +40,10 @@ echo "📊 Проверяем статус webhook..."
 curl -s "https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo" | python3 -m json.tool
 
 echo ""
-echo "✅ Готово! Теперь бот должен работать"
+echo "✅ Готово! Теперь клиентский бот должен работать"
 echo ""
 echo "📝 Для тестирования:"
 echo "1. Откройте бота в Telegram: https://t.me/FoodSave_kz"
 echo "2. Отправьте команду /start"
-echo "3. Для входа от имени заведения используйте команду /login"
+echo "3. Для помощи используйте команду /help"
 echo ""

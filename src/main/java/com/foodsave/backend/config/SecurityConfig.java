@@ -58,8 +58,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/telegram/**").permitAll()
                 .requestMatchers("/api/auth/refresh").permitAll()
                 
-                // Telegram webhook - только для Telegram серверов
-                .requestMatchers("/api/telegram/webhook").permitAll()
+                // Telegram webhooks - only Telegram servers should call these endpoints
+                .requestMatchers("/api/telegram/webhook/**").permitAll()
                 
                 // ЗАКРЫТО: /api/users/** требует аутентификации
                 // ЗАКРЫТО: /api/permissions/** требует аутентификации

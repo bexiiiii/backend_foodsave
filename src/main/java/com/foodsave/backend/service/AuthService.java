@@ -35,7 +35,7 @@ public class AuthService {
             .orElseThrow(() -> new ApiException("Invalid email or password", HttpStatus.UNAUTHORIZED));
 
         if (!user.isActive()) {
-            throw new ApiException("Account is not activated. Please check your email for activation link.", HttpStatus.UNAUTHORIZED);
+            throw new ApiException("Account is inactive. Please contact support.", HttpStatus.UNAUTHORIZED);
         }
 
         Authentication authentication = authenticationManager.authenticate(

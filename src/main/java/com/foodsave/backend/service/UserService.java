@@ -162,7 +162,9 @@ public class UserService {
         if (dto.getRole() != null) {
             user.setRole(dto.getRole());
         }
-        user.setActive(dto.isActive());
+        if (dto.getActive() != null) {
+            user.setActive(dto.getActive());
+        }
         if (dto.getRegistrationSource() != null) {
             user.setRegistrationSource(dto.getRegistrationSource());
         }
