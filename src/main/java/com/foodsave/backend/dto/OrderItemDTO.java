@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Data
 @Builder
@@ -38,12 +39,21 @@ public class OrderItemDTO {
     private String categoryName;
     
     public static OrderItemDTO fromEntity(OrderItem item) {
+        String productImage = null;
+        try {
+            List<String> images = item.getProduct().getImages();
+            if (images != null && !images.isEmpty()) {
+                productImage = images.get(0);
+            }
+        } catch (Exception e) {
+            // fallback: leave productImage null
+        }
         return OrderItemDTO.builder()
                 .id(item.getId())
                 .orderId(item.getOrder().getId())
                 .productId(item.getProduct().getId())
                 .productName(item.getProduct().getName())
-                .productImage(item.getProduct().getImages().isEmpty() ? null : item.getProduct().getImages().get(0))
+                .productImage(productImage)
                 .quantity(item.getQuantity())
                 .unitPrice(item.getUnitPrice())
                 .totalPrice(item.getTotalPrice())

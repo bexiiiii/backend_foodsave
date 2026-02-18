@@ -69,6 +69,9 @@ public class Order extends BaseEntity {
     @Column(name = "payment_status", nullable = false)
     private PaymentStatus paymentStatus = PaymentStatus.PENDING;
 
+    @Column(name = "order_number", unique = true, nullable = false)
+    private String orderNumber;
+
     @Column(name = "tracking_number")
     private String trackingNumber;
 

@@ -14,11 +14,15 @@ import com.foodsave.backend.entity.OrderItem;
 import com.foodsave.backend.entity.Product;
 import com.foodsave.backend.repository.OrderRepository;
 import com.foodsave.backend.repository.ProductRepository;
+import com.foodsave.backend.exception.InsufficientStockException;
 import com.foodsave.backend.exception.ResourceNotFoundException;
 import com.foodsave.backend.security.SecurityUtils;
 import com.foodsave.backend.util.SecurityUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +32,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.ArrayList;
+import java.security.SecureRandom;
+import jakarta.persistence.EntityNotFoundException;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +48,10 @@ public class OrderService {
     private final SecurityUtil securityUtil;
     private final com.foodsave.backend.repository.UserRepository userRepository;
     private final com.foodsave.backend.repository.StoreRepository storeRepository;
+
+    private static final String ORDER_NUMBER_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    private static final int ORDER_NUMBER_LENGTH = 6;
+    private final SecureRandom random = new SecureRandom();
 
     public List<OrderDTO> getAllOrders() {
         try {
@@ -119,6 +129,16 @@ public class OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + id));
     }
 
+    // Вспомогательные методы для кэширования
+    public Long getCurrentUserId() {
+        return securityUtils.getCurrentUser().getId();
+    }
+    
+    public Long getCurrentStoreId() {
+        return securityUtils.getCurrentStore().getId();
+    }
+
+    @Cacheable(value = "userOrders", key = "#root.target.getCurrentUserId()")
     public List<OrderDTO> getCurrentUserOrders() {
         User currentUser = securityUtils.getCurrentUser();
         return orderRepository.findByUser(currentUser).stream()
@@ -126,6 +146,7 @@ public class OrderService {
                 .collect(Collectors.toList());
     }
 
+    @Cacheable(value = "storeOrders", key = "#root.target.getCurrentStoreId()")
     public List<OrderDTO> getCurrentStoreOrders() {
         Store currentStore = securityUtils.getCurrentStore();
         return orderRepository.findByStore(currentStore).stream()
@@ -139,45 +160,64 @@ public class OrderService {
             .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /**
+     * Generates a unique random 6-character alphanumeric order number
+     */
+    private String generateUniqueOrderNumber() {
+        String orderNumber;
+        do {
+            StringBuilder sb = new StringBuilder(ORDER_NUMBER_LENGTH);
+            for (int i = 0; i < ORDER_NUMBER_LENGTH; i++) {
+                int index = random.nextInt(ORDER_NUMBER_CHARS.length());
+                sb.append(ORDER_NUMBER_CHARS.charAt(index));
+            }
+            orderNumber = sb.toString();
+        } while (orderRepository.existsByOrderNumber(orderNumber)); // Ensure uniqueness
+        
+        return orderNumber;
+    }
+
     @Transactional
     public OrderDTO createOrder(OrderDTO orderDTO) {
         log.info("Creating new order: {}", orderDTO);
         
-        // Validate store exists
-        Store store = productRepository.findById(orderDTO.getItems().get(0).getProductId())
-            .orElseThrow(() -> new ResourceNotFoundException("Store not found with id: " + orderDTO.getItems().get(0).getProductId()))
-            .getStore();
-        
         // Create order
         Order order = new Order();
-        order.setStore(store);
         order.setUser(securityUtils.getCurrentUser());
+        order.setOrderNumber(generateUniqueOrderNumber()); // Generate unique order number
         order.setStatus(OrderStatus.PENDING);
         order.setPaymentMethod(orderDTO.getPaymentMethod());
         order.setContactPhone(orderDTO.getContactPhone());
         order.setDeliveryAddress(orderDTO.getDeliveryAddress());
         order.setDeliveryNotes(orderDTO.getDeliveryNotes());
-        
+
         // Process order items
         List<OrderItem> orderItems = new ArrayList<>();
+        Store orderStore = null;
         for (OrderItemDTO itemDTO : orderDTO.getItems()) {
-            Product product = productRepository.findById(itemDTO.getProductId())
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + itemDTO.getProductId()));
-            
-            // Check if sufficient stock is available using ProductService
-            if (!productService.hasSufficientStock(itemDTO.getProductId(), itemDTO.getQuantity())) {
-                throw new IllegalArgumentException("Insufficient stock for product '" + product.getName() + 
-                    "'. Available: " + product.getStockQuantity() + ", Requested: " + itemDTO.getQuantity());
+            int requestedQuantity = itemDTO.getQuantity() != null && itemDTO.getQuantity() > 0
+                    ? itemDTO.getQuantity()
+                    : 1;
+
+            Product product;
+            try {
+                product = productService.reserveProductStock(itemDTO.getProductId(), requestedQuantity);
+            } catch (EntityNotFoundException ex) {
+                throw new ResourceNotFoundException("Product not found with id: " + itemDTO.getProductId());
+            } catch (InsufficientStockException ex) {
+                throw new IllegalArgumentException("Недостаточно остатков для продукта с id " + itemDTO.getProductId());
             }
-            
-            // Reduce stock quantity using ProductService
-            productService.reduceStockQuantity(itemDTO.getProductId(), itemDTO.getQuantity());
+
+            if (orderStore == null) {
+                orderStore = product.getStore();
+                order.setStore(orderStore);
+            }
             
             OrderItem orderItem = new OrderItem();
             orderItem.setOrder(order);
             orderItem.setProduct(product);
-            orderItem.setQuantity(itemDTO.getQuantity());
-            orderItem.setUnitPrice(product.getPrice());
+            orderItem.setQuantity(requestedQuantity);
+            orderItem.setUnitPrice(product.getPrice() != null ? product.getPrice() : BigDecimal.ZERO);
             orderItem.calculateTotalPrice();
             
             orderItems.add(orderItem);
@@ -231,7 +271,7 @@ public class OrderService {
                 orderItem.setOrder(order);
                 orderItem.setProduct(product);
                 orderItem.setQuantity(itemDTO.getQuantity());
-                orderItem.setUnitPrice(product.getPrice());
+                orderItem.setUnitPrice(product.getPrice() != null ? product.getPrice() : BigDecimal.ZERO);
                 orderItem.calculateTotalPrice();
                 
                 order.getItems().add(orderItem);
@@ -353,10 +393,6 @@ public class OrderService {
         
         long readyOrders = orders.stream()
                 .mapToLong(order -> order.getStatus() == OrderStatus.READY_FOR_PICKUP ? 1 : 0)
-                .sum();
-        
-        long outForDeliveryOrders = orders.stream()
-                .mapToLong(order -> order.getStatus() == OrderStatus.OUT_FOR_DELIVERY ? 1 : 0)
                 .sum();
         
         long deliveredOrders = orders.stream()

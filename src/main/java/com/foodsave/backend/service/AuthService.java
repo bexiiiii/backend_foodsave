@@ -1,5 +1,4 @@
 package com.foodsave.backend.service;
-
 import com.foodsave.backend.domain.enums.UserRole;
 import com.foodsave.backend.dto.AuthRequestDTO;
 import com.foodsave.backend.dto.AuthResponseDTO;
@@ -36,7 +35,7 @@ public class AuthService {
             .orElseThrow(() -> new ApiException("Invalid email or password", HttpStatus.UNAUTHORIZED));
 
         if (!user.isActive()) {
-            throw new ApiException("Account is not activated. Please check your email for activation link.", HttpStatus.UNAUTHORIZED);
+            throw new ApiException("Account is inactive. Please contact support.", HttpStatus.UNAUTHORIZED);
         }
 
         Authentication authentication = authenticationManager.authenticate(
@@ -62,6 +61,7 @@ public class AuthService {
         user.setRole(UserRole.CUSTOMER);
         user.setActive(true);
         user.setEnabled(true);
+        user.setRegistrationSource("WEB");
 
         userRepository.save(user);
 
@@ -103,5 +103,35 @@ public class AuthService {
 
     public void logout() {
         SecurityContextHolder.clearContext();
+    }
+
+    public AuthResponseDTO createDevToken(String roleStr) {
+        // Только для разработки - используем реального пользователя из БД
+        UserRole role;
+        try {
+            role = UserRole.valueOf(roleStr.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            role = UserRole.STORE_MANAGER;
+        }
+
+        // Находим пользователя с нужной ролью
+        String email;
+        if (role == UserRole.SUPER_ADMIN) {
+            email = "admin@example.com";
+        } else {
+            email = "dev@example.com";
+        }
+
+        User user = userRepository.findByEmail(email)
+            .orElseThrow(() -> new ApiException("Dev user not found", HttpStatus.NOT_FOUND));
+
+        UserPrincipal userPrincipal = UserPrincipal.create(user);
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+            userPrincipal, null, userPrincipal.getAuthorities()
+        );
+
+        String jwt = jwtTokenProvider.generateToken(authentication);
+
+        return new AuthResponseDTO(jwt, null, UserDTO.fromEntity(user));
     }
 }

@@ -42,10 +42,10 @@ public class Store {
     @Column
     private String email;
 
-    @Column(name = "logo_url")
+    @Column(name = "logo_url", columnDefinition = "TEXT")
     private String logo;
 
-    @Column(name = "cover_image_url")
+    @Column(name = "cover_image_url", columnDefinition = "TEXT")
     private String coverImage;
 
     @Column(name = "opening_hours")

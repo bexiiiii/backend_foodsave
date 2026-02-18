@@ -4,8 +4,9 @@ import com.foodsave.backend.entity.User;
 import com.foodsave.backend.dto.UserDTO;
 import com.foodsave.backend.repository.UserRepository;
 import com.foodsave.backend.domain.enums.UserRole;
-import com.foodsave.backend.util.SecurityUtil;
+import com.foodsave.backend.security.UserPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.Authentication;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -25,7 +26,6 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
-    private final SecurityUtil securityUtil;
 
     public List<UserDTO> getAllUsers() {
         return userRepository.findAll().stream()
@@ -52,8 +52,19 @@ public class UserService {
     }
 
     public UserDTO getCurrentUser() {
-        User currentUser = securityUtil.getCurrentUser();
-        return UserDTO.fromEntity(currentUser);
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        
+        if (authentication != null && authentication.getPrincipal() instanceof UserPrincipal) {
+            UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
+            
+            // Получаем полную информацию о пользователе из базы данных
+            User user = userRepository.findById(userPrincipal.getId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+            
+            return UserDTO.fromEntity(user);
+        }
+        
+        throw new RuntimeException("User not authenticated");
     }
 
     public UserDTO updateUserProfile(UserDTO userDTO) {
@@ -75,9 +86,12 @@ public class UserService {
         if (user.getRole() == null) {
             user.setRole(UserRole.CUSTOMER);
         }
-        
+
         user.setActive(true);
-        
+        if (user.getRegistrationSource() == null) {
+            user.setRegistrationSource("ADMIN");
+        }
+
         if (userDTO.getPassword() != null && !userDTO.getPassword().isEmpty()) {
             user.setPassword(passwordEncoder.encode(userDTO.getPassword()));
         } else {
@@ -127,14 +141,51 @@ public class UserService {
     }
 
     private void updateUserFromDTO(User user, UserDTO dto) {
-        user.setFirstName(dto.getFirstName());
-        user.setLastName(dto.getLastName());
-        user.setEmail(dto.getEmail());
-        user.setPhone(dto.getPhone());
-        user.setProfilePicture(dto.getProfilePicture());
-        user.setAddress(dto.getAddress());
-        user.setRole(dto.getRole());
-        user.setActive(dto.isActive());
+        if (dto.getFirstName() != null) {
+            user.setFirstName(dto.getFirstName());
+        }
+        if (dto.getLastName() != null) {
+            user.setLastName(dto.getLastName());
+        }
+        if (dto.getEmail() != null) {
+            user.setEmail(dto.getEmail());
+        }
+        if (dto.getPhone() != null) {
+            user.setPhone(dto.getPhone());
+        }
+        if (dto.getProfilePicture() != null) {
+            user.setProfilePicture(dto.getProfilePicture());
+        }
+        if (dto.getAddress() != null) {
+            user.setAddress(dto.getAddress());
+        }
+        if (dto.getRole() != null) {
+            user.setRole(dto.getRole());
+        }
+        if (dto.getActive() != null) {
+            user.setActive(dto.getActive());
+        }
+        if (dto.getRegistrationSource() != null) {
+            user.setRegistrationSource(dto.getRegistrationSource());
+        }
+        if (dto.getTelegramUser() != null) {
+            user.setTelegramUser(dto.getTelegramUser());
+        }
+        if (dto.getTelegramUserId() != null) {
+            user.setTelegramUserId(dto.getTelegramUserId());
+        }
+        if (dto.getTelegramUsername() != null) {
+            user.setTelegramUsername(dto.getTelegramUsername());
+        }
+        if (dto.getTelegramPhotoUrl() != null) {
+            user.setTelegramPhotoUrl(dto.getTelegramPhotoUrl());
+        }
+        if (dto.getTelegramLanguageCode() != null) {
+            user.setTelegramLanguageCode(dto.getTelegramLanguageCode());
+        }
+        if (dto.getTelegramRegisteredAt() != null) {
+            user.setTelegramRegisteredAt(dto.getTelegramRegisteredAt());
+        }
     }
 
     private String generateResetToken() {
