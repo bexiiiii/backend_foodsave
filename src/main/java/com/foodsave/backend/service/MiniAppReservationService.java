@@ -1,5 +1,6 @@
 package com.foodsave.backend.service;
 
+import com.foodsave.backend.domain.enums.DeliveryType;
 import com.foodsave.backend.domain.enums.OrderStatus;
 import com.foodsave.backend.domain.enums.PaymentMethod;
 import com.foodsave.backend.domain.enums.PaymentStatus;
@@ -90,11 +91,20 @@ public class MiniAppReservationService {
         order.setStatus(OrderStatus.PENDING);
         order.setPaymentStatus(PaymentStatus.PENDING);
         order.setPaymentMethod(PaymentMethod.CASH);
-        order.setContactPhone(resolvePhone(user));
+        DeliveryType deliveryType = request.deliveryType() != null ? request.deliveryType() : DeliveryType.PICKUP;
+        order.setDeliveryType(deliveryType);
+
+        String phone = (request.contactPhone() != null && !request.contactPhone().isBlank())
+                ? request.contactPhone().trim()
+                : resolvePhone(user);
+        order.setContactPhone(phone);
+
         order.setDeliveryAddress(product.getStore() != null ? product.getStore().getAddress() : null);
         order.setDeliveryNotes(request.note() != null && !request.note().isBlank()
                 ? request.note().trim()
-                : "Telegram бронирование через мини-приложение");
+                : (deliveryType == DeliveryType.COURIER
+                        ? "Доставка курьером через мини-приложение"
+                        : "Telegram бронирование через мини-приложение"));
 
         OrderItem item = new OrderItem();
         item.setOrder(order);
@@ -163,6 +173,13 @@ public class MiniAppReservationService {
         messageBuilder.append("Количество: ").append(quantity).append(" шт.\n");
         messageBuilder.append("Цена за шт.: ").append(formattedUnit).append("\n");
         messageBuilder.append("Сумма: ").append(formattedTotal).append("\n");
+        String deliveryLabel = order.getDeliveryType() == DeliveryType.COURIER
+                ? "🚚 Доставка курьером"
+                : "🏪 Самовывоз";
+        messageBuilder.append("Тип доставки: ").append(deliveryLabel).append("\n");
+        if (order.getContactPhone() != null) {
+            messageBuilder.append("Контактный телефон: ").append(order.getContactPhone()).append("\n");
+        }
        
 
         String formattedTime = RESERVATION_TIME_FORMAT.format(LocalDateTime.now(DEFAULT_TIME_ZONE));
