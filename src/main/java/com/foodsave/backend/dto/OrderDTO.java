@@ -67,6 +67,7 @@ public class OrderDTO {
                 .items(order.getItems().stream()
                         .map(OrderItemDTO::fromEntity)
                         .toList())
+                .contactPhone(order.getContactPhone())
                 .status(order.getStatus())
                 .deliveryAddress(order.getDeliveryAddress())
                 .deliveryNotes(order.getDeliveryNotes())

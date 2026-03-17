@@ -164,7 +164,7 @@ public class MiniAppReservationService {
         String formattedUnit = formatPrice(item != null ? item.getUnitPrice() : product.getPrice());
 
         StringBuilder messageBuilder = new StringBuilder();
-        messageBuilder.append("🧾 Заказ №").append(order.getOrderNumber()).append("\n");
+        messageBuilder.append("Заказ №").append(order.getOrderNumber()).append("\n");
         messageBuilder.append("Бокс: ").append(orUnknown(product.getName())).append("\n");
         messageBuilder.append("Магазин: ").append(store != null ? orUnknown(store.getName()) : "не указано").append("\n");
         if (store != null && store.getAddress() != null && !store.getAddress().isBlank()) {
@@ -174,8 +174,8 @@ public class MiniAppReservationService {
         messageBuilder.append("Цена за шт.: ").append(formattedUnit).append("\n");
         messageBuilder.append("Сумма: ").append(formattedTotal).append("\n");
         String deliveryLabel = order.getDeliveryType() == DeliveryType.COURIER
-                ? "🚚 Доставка курьером"
-                : "🏪 Самовывоз";
+                ? "Доставка курьером"
+                : "Самовывоз";
         messageBuilder.append("Тип доставки: ").append(deliveryLabel).append("\n");
         if (order.getContactPhone() != null) {
             messageBuilder.append("Контактный телефон: ").append(order.getContactPhone()).append("\n");
