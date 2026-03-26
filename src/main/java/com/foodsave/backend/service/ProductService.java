@@ -4,6 +4,7 @@ import com.foodsave.backend.entity.Product;
 import com.foodsave.backend.entity.Store;
 import com.foodsave.backend.entity.Category;
 import com.foodsave.backend.dto.ProductDTO;
+import com.foodsave.backend.exception.InsufficientStockException;
 import com.foodsave.backend.repository.ProductRepository;
 import com.foodsave.backend.repository.StoreRepository;
 import com.foodsave.backend.repository.CategoryRepository;
@@ -12,11 +13,18 @@ import com.foodsave.backend.util.SecurityUtil;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import java.util.Optional;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -78,20 +86,40 @@ public class ProductService {
 
     private Long getCurrentManagedStoreId(Long managerId) {
         try {
+            log.info("DEBUG: Looking for managed store for manager ID: {}", managerId);
             com.foodsave.backend.entity.User manager = userRepository.findById(managerId).orElse(null);
             
-            if (manager != null) {
-                // Поиск заведения, которым управляет данный менеджер
-                org.springframework.data.domain.Page<com.foodsave.backend.entity.Store> stores = 
-                    storeRepository.findByManager(manager, org.springframework.data.domain.Pageable.unpaged());
-                
-                if (!stores.getContent().isEmpty()) {
-                    return stores.getContent().get(0).getId();
+            if (manager == null) {
+                log.warn("DEBUG: Manager with ID {} not found in database", managerId);
+                return null;
+            }
+            
+            log.info("DEBUG: Found manager: id={}, username={}, role={}", 
+                manager.getId(), manager.getUsername(), manager.getRole());
+            
+            // Поиск заведения, которым управляет данный менеджер
+            Optional<com.foodsave.backend.entity.Store> storeOpt = 
+                storeRepository.findByManager(manager);
+            
+            if (storeOpt.isPresent()) {
+                Long storeId = storeOpt.get().getId();
+                log.info("DEBUG: Found managed store: id={}, name={}", storeId, storeOpt.get().getName());
+                return storeId;
+            } else {
+                log.warn("DEBUG: No store found for manager ID: {}", managerId);
+                log.info("DEBUG: Checking if manager has stores via findAllByManager...");
+                List<com.foodsave.backend.entity.Store> allStores = storeRepository.findAllByManager(manager);
+                log.info("DEBUG: Found {} stores via findAllByManager", allStores.size());
+                if (!allStores.isEmpty()) {
+                    Long storeId = allStores.get(0).getId();
+                    log.info("DEBUG: Using first store from list: id={}, name={}", storeId, allStores.get(0).getName());
+                    return storeId;
                 }
             }
         } catch (Exception e) {
             log.error("Error finding managed store: ", e);
         }
+        log.warn("DEBUG: Returning null - no managed store found");
         return null;
     }
 
@@ -101,24 +129,56 @@ public class ProductService {
         return convertToDTO(product);
     }
 
+    // Note: Page objects don't cache well with Redis due to serialization issues
     public Page<ProductDTO> getProductsByStore(Long storeId, Pageable pageable) {
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new EntityNotFoundException("Store not found"));
-        return productRepository.findByStore(store, pageable)
+        
+        // Check if current user is manager of this store
+        org.springframework.security.core.Authentication authentication = 
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        
+        if (authentication != null && authentication.getPrincipal() instanceof com.foodsave.backend.security.UserPrincipal) {
+            com.foodsave.backend.security.UserPrincipal userPrincipal = 
+                (com.foodsave.backend.security.UserPrincipal) authentication.getPrincipal();
+            
+            if (userPrincipal.getRole() == com.foodsave.backend.domain.enums.UserRole.STORE_MANAGER) {
+                Long managedStoreId = getCurrentManagedStoreId(userPrincipal.getId());
+                // If manager is viewing their own store, show all products (including OUT_OF_STOCK)
+                if (managedStoreId != null && managedStoreId.equals(storeId)) {
+                    log.info("Manager {} viewing their store {} products", userPrincipal.getId(), storeId);
+                    return productRepository.findByStoreId(storeId, pageable)
+                            .map(this::convertToDTO);
+                }
+            }
+        }
+        
+        // For regular users, only show AVAILABLE products (exclude OUT_OF_STOCK)
+        return productRepository.findActiveAvailableByStoreId(storeId, pageable)
                 .map(this::convertToDTO);
     }
 
+    @Cacheable(value = "categories", key = "'ALL'")
     public List<String> getAllCategories() {
         return categoryRepository.findAll().stream()
                 .map(Category::getName)
                 .collect(Collectors.toList());
     }
 
+    // Note: Page objects don't cache well with Redis due to serialization issues
     public Page<ProductDTO> getFeaturedProducts(Pageable pageable) {
-        return productRepository.findByDiscountPercentageGreaterThan(0.0, pageable)
+        // Return all active products with status AVAILABLE (exclude OUT_OF_STOCK)
+        return productRepository.findAllActiveAvailableProducts(pageable)
                 .map(this::convertToDTO);
     }
 
+    @Caching(evict = {
+            @CacheEvict(value = "products", allEntries = true),
+            @CacheEvict(value = "productsByStore", allEntries = true),
+            @CacheEvict(value = "featuredProducts", allEntries = true),
+            @CacheEvict(value = "discountedProducts", allEntries = true),
+            @CacheEvict(value = "categories", allEntries = true)
+    })
     public ProductDTO createProduct(ProductDTO productDTO) {
         Store store = storeRepository.findById(productDTO.getStoreId())
                 .orElseThrow(() -> new EntityNotFoundException("Store not found"));
@@ -132,6 +192,12 @@ public class ProductService {
         return convertToDTO(productRepository.save(product));
     }
 
+    @Caching(evict = {
+            @CacheEvict(value = "products", key = "#id"),
+            @CacheEvict(value = "productsByStore", allEntries = true),
+            @CacheEvict(value = "featuredProducts", allEntries = true),
+            @CacheEvict(value = "discountedProducts", allEntries = true)
+    })
     public ProductDTO updateProduct(Long id, ProductDTO productDTO) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found"));
@@ -143,15 +209,23 @@ public class ProductService {
         return convertToDTO(productRepository.save(product));
     }
 
+    @Caching(evict = {
+            @CacheEvict(value = "products", key = "#id"),
+            @CacheEvict(value = "productsByStore", allEntries = true),
+            @CacheEvict(value = "featuredProducts", allEntries = true),
+            @CacheEvict(value = "discountedProducts", allEntries = true)
+    })
     public void deleteProduct(Long id) {
         productRepository.deleteById(id);
     }
 
+    // Note: Page objects don't cache well with Redis due to serialization issues
     public Page<ProductDTO> searchProducts(String query, Pageable pageable) {
         return productRepository.searchProducts(query, pageable)
                 .map(this::convertToDTO);
     }
 
+    // Note: Page objects don't cache well with Redis due to serialization issues
     public Page<ProductDTO> getProductsByCategory(Long categoryId, Pageable pageable) {
         Category category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new EntityNotFoundException("Category not found"));
@@ -159,11 +233,13 @@ public class ProductService {
                 .map(this::convertToDTO);
     }
 
+    // Note: Page objects don't cache well with Redis due to serialization issues
     public Page<ProductDTO> getDiscountedProducts(Pageable pageable) {
         return productRepository.findByDiscountPercentageGreaterThan(0.0, pageable)
                 .map(this::convertToDTO);
     }
 
+    // Note: Page objects don't cache well with Redis due to serialization issues
     public Page<ProductDTO> getLowStockProducts(Integer threshold, Pageable pageable) {
         return productRepository.findByStockQuantityLessThanEqual(threshold, pageable)
                 .map(this::convertToDTO);
@@ -174,6 +250,12 @@ public class ProductService {
                 .map(this::convertToDTO);
     }
 
+    @Caching(evict = {
+            @CacheEvict(value = "products", key = "#id"),
+            @CacheEvict(value = "productsByStore", allEntries = true),
+            @CacheEvict(value = "featuredProducts", allEntries = true),
+            @CacheEvict(value = "discountedProducts", allEntries = true)
+    })
     public ProductDTO updateProductStatus(Long id, ProductStatus status) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found"));
@@ -184,6 +266,12 @@ public class ProductService {
     /**
      * Update stock quantity for a product
      */
+    @Caching(evict = {
+            @CacheEvict(value = "products", key = "#productId"),
+            @CacheEvict(value = "productsByStore", allEntries = true),
+            @CacheEvict(value = "featuredProducts", allEntries = true),
+            @CacheEvict(value = "discountedProducts", allEntries = true)
+    })
     public ProductDTO updateStockQuantity(Long productId, Integer newQuantity) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found"));
@@ -196,20 +284,57 @@ public class ProductService {
         return convertToDTO(productRepository.save(product));
     }
 
+    @Caching(evict = {
+            @CacheEvict(value = "products", key = "#productId"),
+            @CacheEvict(value = "productsByStore", allEntries = true),
+            @CacheEvict(value = "featuredProducts", allEntries = true),
+            @CacheEvict(value = "discountedProducts", allEntries = true)
+    })
+    public ProductDTO updateProductPrices(Long productId,
+                                          BigDecimal originalPrice,
+                                          BigDecimal discountedPrice) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new EntityNotFoundException("Product not found"));
+
+        if (discountedPrice == null || discountedPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Цена со скидкой должна быть больше нуля");
+        }
+
+        if (originalPrice != null && originalPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Цена без скидки должна быть больше нуля");
+        }
+
+        product.setPrice(discountedPrice);
+        product.setOriginalPrice(originalPrice);
+        product.setDiscountPercentage(calculateDiscountPercentage(originalPrice, discountedPrice));
+
+        return convertToDTO(productRepository.save(product));
+    }
+
     /**
      * Reduce stock quantity by specified amount
      */
+    @Deprecated
+    @Caching(evict = {
+            @CacheEvict(value = "products", key = "#productId"),
+            @CacheEvict(value = "productsByStore", allEntries = true),
+            @CacheEvict(value = "featuredProducts", allEntries = true),
+            @CacheEvict(value = "discountedProducts", allEntries = true)
+    })
     public ProductDTO reduceStockQuantity(Long productId, Integer quantity) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new EntityNotFoundException("Product not found"));
-        
-        if (product.getStockQuantity() < quantity) {
-            throw new IllegalArgumentException("Insufficient stock. Available: " + 
-                product.getStockQuantity() + ", Requested: " + quantity);
-        }
-        
-        product.setStockQuantity(product.getStockQuantity() - quantity);
-        return convertToDTO(productRepository.save(product));
+        int normalizedQuantity = (quantity != null && quantity > 0) ? quantity : 1;
+        Product product = decreaseStockWithLock(productId, normalizedQuantity);
+        return convertToDTO(product);
+    }
+
+    @Caching(evict = {
+            @CacheEvict(value = "products", key = "#productId"),
+            @CacheEvict(value = "productsByStore", allEntries = true),
+            @CacheEvict(value = "featuredProducts", allEntries = true),
+            @CacheEvict(value = "discountedProducts", allEntries = true)
+    })
+    public Product reserveProductStock(Long productId, int quantity) {
+        return decreaseStockWithLock(productId, quantity);
     }
 
     /**
@@ -218,50 +343,144 @@ public class ProductService {
     public boolean hasSufficientStock(Long productId, Integer requiredQuantity) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found"));
-        return product.getStockQuantity() >= requiredQuantity;
+        int requested = requiredQuantity != null ? requiredQuantity : 0;
+        int available = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
+        return available >= requested;
+    }
+
+    private Product decreaseStockWithLock(Long productId, int quantity) {
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Requested quantity must be greater than zero");
+        }
+
+        Product product = productRepository.findByIdForUpdate(productId)
+                .orElseThrow(() -> new EntityNotFoundException("Product not found"));
+
+        // Check if product is active
+        if (!Boolean.TRUE.equals(product.getActive())) {
+            throw new IllegalStateException("Этот продукт недоступен для бронирования");
+        }
+
+        int currentStock = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
+        if (currentStock < quantity) {
+            log.warn("Insufficient stock for product {} (requested={}, available={})",
+                    productId, quantity, currentStock);
+            throw new InsufficientStockException(String.format(
+                    "Недостаточно остатков: доступно %d, запрошено %d", currentStock, quantity));
+        }
+
+        product.setStockQuantity(currentStock - quantity);
+        return productRepository.save(product);
     }
 
     private ProductDTO convertToDTO(Product product) {
+        BigDecimal discountedPrice = product.getPrice() != null ? product.getPrice() : BigDecimal.ZERO;
+        BigDecimal originalPrice = product.getOriginalPrice();
+        Double discountPercentage = product.getDiscountPercentage();
+        Integer stockQuantity = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
+        List<String> images = product.getImages() != null ? product.getImages() : Collections.emptyList();
+        boolean isActive = Boolean.TRUE.equals(product.getActive());
+
         return ProductDTO.builder()
                 .id(product.getId())
                 .name(product.getName())
                 .description(product.getDescription())
-                .price(product.getPrice())
-                .originalPrice(product.getOriginalPrice())
-                .discountPercentage(product.getDiscountPercentage())
-                .stockQuantity(product.getStockQuantity())
+                .price(discountedPrice)
+                .originalPrice(originalPrice)
+                .discountPercentage(discountPercentage)
+                .stockQuantity(stockQuantity)
                 .storeId(product.getStore().getId())
                 .storeName(product.getStore().getName())
                 .storeLogo(product.getStore().getLogo())
                 .storeAddress(product.getStore().getAddress())
                 .categoryId(product.getCategory().getId())
                 .categoryName(product.getCategory().getName())
-                .images(product.getImages())
+                .images(images)
                 .expiryDate(product.getExpiryDate())
                 .status(product.getStatus())
                 .active(product.getActive())
                 // Computed properties for frontend compatibility
-                .isAvailable(product.getActive() && 
-                           product.getStatus() == ProductStatus.AVAILABLE && 
-                           product.getStockQuantity() > 0)
-                .availableQuantity(product.getStockQuantity())
-                .imageUrl(!product.getImages().isEmpty() ? product.getImages().get(0) : null)
+                .isAvailable(isActive &&
+                        product.getStatus() == ProductStatus.AVAILABLE &&
+                        stockQuantity > 0)
+                .availableQuantity(stockQuantity)
+                .imageUrl(!images.isEmpty() ? images.get(0) : null)
                 .expirationDate(product.getExpiryDate() != null ? product.getExpiryDate().toString() : null)
-                .isFeatured(product.getDiscountPercentage() != null && product.getDiscountPercentage() > 0)
+                .isFeatured(discountPercentage != null && discountPercentage > 0)
                 .rating(0.0) // Default rating for now
                 .build();
+    }
+
+    private Double calculateDiscountPercentage(BigDecimal originalPrice, BigDecimal discountedPrice) {
+        if (originalPrice == null || originalPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        if (discountedPrice == null || discountedPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        if (discountedPrice.compareTo(originalPrice) >= 0) {
+            return 0.0;
+        }
+        BigDecimal discount = originalPrice.subtract(discountedPrice)
+                .divide(originalPrice, 4, java.math.RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100));
+        return discount.doubleValue();
     }
 
     private void updateProductFromDTO(Product product, ProductDTO dto) {
         product.setName(dto.getName());
         product.setDescription(dto.getDescription());
-        product.setPrice(dto.getPrice());
-        product.setOriginalPrice(dto.getOriginalPrice());
-        product.setDiscountPercentage(dto.getDiscountPercentage());
-        product.setStockQuantity(dto.getStockQuantity());
-        product.setImages(dto.getImages());
+        
+        // Set original price and discount percentage
+        BigDecimal originalPrice = dto.getOriginalPrice() != null ? dto.getOriginalPrice() : product.getOriginalPrice();
+        Double discountPercentage = dto.getDiscountPercentage() != null 
+                ? dto.getDiscountPercentage() 
+                : product.getDiscountPercentage();
+        
+        product.setOriginalPrice(originalPrice);
+        product.setDiscountPercentage(discountPercentage);
+        
+        // Auto-calculate price from originalPrice and discountPercentage
+        BigDecimal calculatedPrice = calculateDiscountedPrice(originalPrice, discountPercentage);
+        product.setPrice(calculatedPrice);
+        
+        product.setStockQuantity(resolveStockQuantity(dto.getStockQuantity(), product.getStockQuantity()));
+        if (dto.getImages() != null) {
+            product.setImages(dto.getImages());
+        } else if (product.getImages() == null) {
+            product.setImages(new ArrayList<>());
+        }
         product.setExpiryDate(dto.getExpiryDate());
         product.setStatus(dto.getStatus());
         product.setActive(dto.getActive());
+    }
+    
+    /**
+     * Calculate discounted price from original price and discount percentage
+     * Formula: price = originalPrice * (1 - discountPercentage/100)
+     */
+    private BigDecimal calculateDiscountedPrice(BigDecimal originalPrice, Double discountPercentage) {
+        if (originalPrice == null) {
+            return BigDecimal.ZERO;
+        }
+        
+        if (discountPercentage == null || discountPercentage <= 0) {
+            // No discount, return original price
+            return originalPrice;
+        }
+        
+        // Calculate discount: price = originalPrice * (1 - discountPercentage/100)
+        BigDecimal discountMultiplier = BigDecimal.ONE.subtract(
+            BigDecimal.valueOf(discountPercentage).divide(BigDecimal.valueOf(100), 4, java.math.RoundingMode.HALF_UP)
+        );
+        
+        return originalPrice.multiply(discountMultiplier).setScale(2, java.math.RoundingMode.HALF_UP);
+    }
+
+    private Integer resolveStockQuantity(Integer requestedQuantity, Integer currentQuantity) {
+        if (requestedQuantity != null) {
+            return Math.max(requestedQuantity, 0);
+        }
+        return currentQuantity;
     }
 }

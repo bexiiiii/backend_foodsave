@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.Builder;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 
 @Data
@@ -37,19 +38,42 @@ public class CartItemDTO {
     
     private BigDecimal total;
     
-    public static CartItemDTO fromEntity(CartItem cartItem) {
+    public static CartItemDTO fromEntity(CartItem item) {
+        if (item == null) {
+            // Логируем ошибку
+            System.err.println("CartItemDTO.fromEntity: item is null");
+            return null;
+        }
+        if (item.getProduct() == null) {
+            System.err.println("CartItemDTO.fromEntity: product is null for cartItem id=" + item.getId());
+            return null;
+        }
+        if (item.getCart() == null) {
+            System.err.println("CartItemDTO.fromEntity: cart is null for cartItem id=" + item.getId());
+            return null;
+        }
+        List<String> imageUrls = new ArrayList<>();
+        try {
+            List<String> images = item.getProduct().getImages();
+            if (images != null && org.hibernate.Hibernate.isInitialized(images)) {
+                imageUrls = new ArrayList<>(images);
+            }
+        } catch (Exception e) {
+            System.err.println("CartItemDTO.fromEntity: error accessing images for product id=" + item.getProduct().getId() + ": " + e.getMessage());
+            imageUrls = new ArrayList<>();
+        }
         return CartItemDTO.builder()
-                .id(cartItem.getId())
-                .cartId(cartItem.getCart().getId())
-                .productId(cartItem.getProduct().getId())
-                .productName(cartItem.getProduct().getName())
-                .productImages(cartItem.getProduct().getImages())
-                .quantity(cartItem.getQuantity())
-                .price(cartItem.getPrice())
-                .discountPrice(cartItem.getDiscountPrice())
-                .subtotal(cartItem.getSubtotal())
-                .discount(cartItem.getDiscount())
-                .total(cartItem.getTotal())
+                .id(item.getId())
+                .cartId(item.getCart().getId())
+                .productId(item.getProduct().getId())
+                .productName(item.getProduct().getName())
+                .productImages(imageUrls)
+                .quantity(item.getQuantity())
+                .price(item.getPrice())
+                .discountPrice(item.getDiscountPrice())
+                .subtotal(item.getSubtotal())
+                .discount(item.getDiscount())
+                .total(item.getTotal())
                 .build();
     }
 }
