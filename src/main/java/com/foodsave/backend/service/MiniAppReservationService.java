@@ -182,6 +182,10 @@ public class MiniAppReservationService {
         }
        
 
+        if (store != null && store.getClosingHours() != null && !store.getClosingHours().isBlank()) {
+            messageBuilder.append("Заберите бокс до: ").append(store.getClosingHours()).append("\n");
+        }
+
         String formattedTime = RESERVATION_TIME_FORMAT.format(LocalDateTime.now(DEFAULT_TIME_ZONE));
         messageBuilder.append("Время бронирования: ").append(formattedTime);
 
