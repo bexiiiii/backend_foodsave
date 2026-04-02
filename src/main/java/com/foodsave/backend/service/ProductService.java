@@ -40,6 +40,7 @@ public class ProductService {
     private final CategoryRepository categoryRepository;
     private final SecurityUtil securityUtil;
     private final com.foodsave.backend.repository.UserRepository userRepository;
+    private final TelegramBotService telegramBotService;
 
     public Page<ProductDTO> getAllProducts(Pageable pageable) {
         log.info("DEBUG: Getting all products");
@@ -189,7 +190,70 @@ public class ProductService {
         updateProductFromDTO(product, productDTO);
         product.setStore(store);
         product.setCategory(category);
-        return convertToDTO(productRepository.save(product));
+        ProductDTO saved = convertToDTO(productRepository.save(product));
+        sendNewProductNotification(productRepository.findById(saved.getId()).orElse(null));
+        return saved;
+    }
+
+    private void sendNewProductNotification(Product product) {
+        if (product == null) return;
+        try {
+            java.util.List<com.foodsave.backend.entity.User> telegramUsers = userRepository.findByTelegramUserTrue();
+            if (telegramUsers.isEmpty()) return;
+
+            BigDecimal originalPrice = product.getOriginalPrice();
+            BigDecimal discountedPrice = product.getPrice() != null ? product.getPrice() : BigDecimal.ZERO;
+            Double discountPct = product.getDiscountPercentage();
+            String storeName = product.getStore() != null ? product.getStore().getName() : "";
+
+            StringBuilder text = new StringBuilder();
+            text.append("<b>").append(product.getName()).append("</b>\n");
+            if (storeName != null && !storeName.isBlank()) {
+                text.append(storeName).append("\n");
+            }
+            text.append("\n");
+
+            if (originalPrice != null && originalPrice.compareTo(BigDecimal.ZERO) > 0) {
+                text.append("Цена: ").append(formatNotifPrice(discountedPrice))
+                    .append("  <s>").append(formatNotifPrice(originalPrice)).append("</s>\n");
+                BigDecimal savings = originalPrice.subtract(discountedPrice);
+                if (savings.compareTo(BigDecimal.ZERO) > 0) {
+                    text.append("Экономия: ").append(formatNotifPrice(savings)).append("\n");
+                }
+                if (discountPct != null && discountPct > 0) {
+                    text.append("Скидка: ").append(String.format("%.0f", discountPct)).append("%\n");
+                }
+            } else {
+                text.append("Цена: ").append(formatNotifPrice(discountedPrice)).append("\n");
+            }
+
+            String imageUrl = product.getImages() != null && !product.getImages().isEmpty()
+                    ? product.getImages().get(0) : null;
+            String productUrl = telegramBotService.resolveButtonUrl("/details/" + product.getId());
+
+            for (com.foodsave.backend.entity.User user : telegramUsers) {
+                if (user.getTelegramUserId() == null) continue;
+                try {
+                    telegramBotService.sendMessage(
+                            user.getTelegramUserId(),
+                            new TelegramBotService.TelegramMessagePayload(
+                                    text.toString(), imageUrl, "Забронировать", productUrl
+                            )
+                    );
+                } catch (Exception e) {
+                    log.warn("Failed to notify user {} about new product", user.getTelegramUserId(), e);
+                }
+            }
+            log.info("New product notification sent to {} users", telegramUsers.size());
+        } catch (Exception e) {
+            log.error("Failed to send new product notifications", e);
+        }
+    }
+
+    private String formatNotifPrice(BigDecimal value) {
+        if (value == null) return "0 ₸";
+        String formatted = String.format(java.util.Locale.US, "%,.0f ₸", value.doubleValue());
+        return formatted.replace(',', ' ');
     }
 
     @Caching(evict = {
