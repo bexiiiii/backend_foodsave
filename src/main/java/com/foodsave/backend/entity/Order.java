@@ -1,5 +1,6 @@
 package com.foodsave.backend.entity;
 
+import com.foodsave.backend.domain.enums.DeliveryType;
 import com.foodsave.backend.domain.enums.OrderStatus;
 import com.foodsave.backend.domain.enums.PaymentMethod;
 import com.foodsave.backend.domain.enums.PaymentStatus;
@@ -68,6 +69,13 @@ public class Order extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_status", nullable = false)
     private PaymentStatus paymentStatus = PaymentStatus.PENDING;
+
+    @Column(name = "order_number", unique = true, nullable = false)
+    private String orderNumber;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "delivery_type")
+    private DeliveryType deliveryType;
 
     @Column(name = "tracking_number")
     private String trackingNumber;

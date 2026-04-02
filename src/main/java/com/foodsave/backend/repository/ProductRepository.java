@@ -4,21 +4,47 @@ import com.foodsave.backend.entity.Product;
 import com.foodsave.backend.entity.Store;
 import com.foodsave.backend.entity.Category;
 import com.foodsave.backend.domain.enums.ProductStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
     
+    // Оптимизированные запросы с EntityGraph для быстрой загрузки
+    @EntityGraph(attributePaths = {"store", "category"})
+    @Query("SELECT p FROM Product p WHERE p.store.id = :storeId AND p.active = true")
+    Page<Product> findLightByStoreId(@Param("storeId") Long storeId, Pageable pageable);
+    
+    @EntityGraph(attributePaths = {"store", "category"})  
+    @Query("SELECT p FROM Product p WHERE p.discountPercentage > 0 AND p.active = true")
+    Page<Product> findLightDiscountedProducts(Pageable pageable);
+
+    // Оптимизированные запросы с EntityGraph
+    @EntityGraph(attributePaths = {"store", "category"})
+    @Query("SELECT p FROM Product p WHERE p.store.id = :storeId AND p.active = true")
+    Page<Product> findActiveByStoreIdOptimized(@Param("storeId") Long storeId, Pageable pageable);
+    
+    @EntityGraph(attributePaths = {"store", "category"})
+    @Query("SELECT p FROM Product p WHERE p.discountPercentage > 0 AND p.active = true")
+    Page<Product> findDiscountedProductsOptimized(Pageable pageable);
+    
+    @EntityGraph(attributePaths = {"store", "category"})
+    @Query("SELECT p FROM Product p WHERE p.category.id = :categoryId AND p.active = true")
+    Page<Product> findByCategoryIdOptimized(@Param("categoryId") Long categoryId, Pageable pageable);
+
     Page<Product> findByStore(Store store, Pageable pageable);
     
     List<Product> findByStoreId(Long storeId);
@@ -80,6 +106,20 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     
     Page<Product> findByDiscountPercentageGreaterThan(Double discountPercentage, Pageable pageable);
     
+    @EntityGraph(attributePaths = {"store", "category"})
+    @Query("SELECT p FROM Product p WHERE p.active = true ORDER BY p.createdAt DESC")
+    Page<Product> findAllActiveProducts(Pageable pageable);
+    
+    // Find all active products with status AVAILABLE (exclude OUT_OF_STOCK)
+    @EntityGraph(attributePaths = {"store", "category"})
+    @Query("SELECT p FROM Product p WHERE p.active = true AND p.status = 'AVAILABLE' ORDER BY p.createdAt DESC")
+    Page<Product> findAllActiveAvailableProducts(Pageable pageable);
+    
+    // Find products by store with status AVAILABLE (exclude OUT_OF_STOCK)
+    @EntityGraph(attributePaths = {"store", "category"})
+    @Query("SELECT p FROM Product p WHERE p.store.id = :storeId AND p.active = true AND p.status = 'AVAILABLE'")
+    Page<Product> findActiveAvailableByStoreId(@Param("storeId") Long storeId, Pageable pageable);
+    
     Page<Product> findByStockQuantityLessThanEqual(Integer threshold, Pageable pageable);
     
     Page<Product> findByExpiryDateIsNotNull(Pageable pageable);
@@ -106,4 +146,12 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     @Query("SELECT p.status as status, COUNT(p) as count FROM Product p WHERE p.store = :store GROUP BY p.status")
     Map<ProductStatus, Long> countByStoreAndStatus(@Param("store") Store store);
+    
+    // Method for counting products by multiple store IDs
+    @Query("SELECT COUNT(p) FROM Product p WHERE p.store.id IN :storeIds")
+    long countByStoreIdIn(@Param("storeIds") List<Long> storeIds);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Product p WHERE p.id = :id")
+    Optional<Product> findByIdForUpdate(@Param("id") Long id);
 }

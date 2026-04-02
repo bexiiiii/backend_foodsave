@@ -1,6 +1,7 @@
 package com.foodsave.backend.dto;
 
 import com.foodsave.backend.entity.Order;
+import com.foodsave.backend.domain.enums.DeliveryType;
 import com.foodsave.backend.domain.enums.OrderStatus;
 import com.foodsave.backend.domain.enums.PaymentMethod;
 import com.foodsave.backend.domain.enums.PaymentStatus;
@@ -43,6 +44,7 @@ public class OrderDTO {
     private String userEmail;
     private String userPhone;
     private String userAddress;
+    private DeliveryType deliveryType;
     private String trackingNumber;
     private String estimatedDeliveryTime;
     private LocalDateTime createdAt;
@@ -61,9 +63,11 @@ public class OrderDTO {
                 .storeLogo(order.getStore().getLogo())
                 .storeAddress(order.getStore().getAddress())
                 .storePhone(order.getStore().getPhone())
+                .orderNumber(order.getOrderNumber())
                 .items(order.getItems().stream()
                         .map(OrderItemDTO::fromEntity)
                         .toList())
+                .contactPhone(order.getContactPhone())
                 .status(order.getStatus())
                 .deliveryAddress(order.getDeliveryAddress())
                 .deliveryNotes(order.getDeliveryNotes())
@@ -72,8 +76,9 @@ public class OrderDTO {
                 .total(order.getTotal())
                 .paymentMethod(order.getPaymentMethod())
                 .paymentStatus(order.getPaymentStatus())
+                .deliveryType(order.getDeliveryType())
                 .trackingNumber(order.getTrackingNumber())
-                .estimatedDeliveryTime(order.getEstimatedDeliveryTime() != null ? 
+                .estimatedDeliveryTime(order.getEstimatedDeliveryTime() != null ?
                     order.getEstimatedDeliveryTime().toString() : null)
                 .createdAt(order.getCreatedAt())
                 .updatedAt(order.getUpdatedAt())

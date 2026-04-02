@@ -12,6 +12,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
@@ -57,6 +58,9 @@ public class User extends BaseEntity implements UserDetails {
     @Column(nullable = false)
     private UserRole role;
 
+    @Column(name = "registration_source")
+    private String registrationSource;
+
     @Column(name = "enabled", nullable = false)
     private boolean enabled = true;
 
@@ -68,6 +72,27 @@ public class User extends BaseEntity implements UserDetails {
 
     @Column(name = "verification_token")
     private String verificationToken;
+
+    @Column(name = "telegram_user_id", unique = true)
+    private Long telegramUserId;
+
+    @Column(name = "telegram_username")
+    private String telegramUsername;
+
+    @Column(name = "telegram_photo_url")
+    private String telegramPhotoUrl;
+
+    @Column(name = "telegram_language_code")
+    private String telegramLanguageCode;
+
+    @Column(name = "telegram_registered_at")
+    private LocalDateTime telegramRegisteredAt;
+
+    @Column(name = "telegram_data_raw", columnDefinition = "TEXT")
+    private String telegramDataRaw;
+
+    @Column(name = "is_telegram_user", nullable = false)
+    private boolean telegramUser = false;
 
     @OneToMany(mappedBy = "owner", cascade = CascadeType.ALL)
     private Set<Store> stores = new HashSet<>();

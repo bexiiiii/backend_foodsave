@@ -23,7 +23,7 @@ public class OpenApiConfig {
                 .contact(new Contact()
                     .name("FoodSave Team")
                     .email("support@foodsave.com")
-                    .url("https://foodsave.com"))
+                    .url("https://foodsave.kz"))
                 .license(new License()
                     .name("Apache 2.0")
                     .url("http://www.apache.org/licenses/LICENSE-2.0.html")))
